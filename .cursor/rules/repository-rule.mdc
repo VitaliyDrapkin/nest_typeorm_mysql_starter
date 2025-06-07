@@ -1,0 +1,154 @@
+---
+description: Guidelines for implementing and using repositories in the NestJS application
+globs: 
+alwaysApply: false
+---
+---
+description: Guidelines for implementing and using repositories in the NestJS application
+globs: src/**/repositories/*.ts
+---
+# Repository Guidelines
+
+This document outlines best practices for implementing and using repositories in our NestJS application.
+
+## Base Repository Usage
+
+The `BaseRepository` class provides a robust foundation for all repositories. It includes common CRUD operations and query filtering capabilities.
+
+### Key Features
+
+1. **Type Safety**
+   - Generic type parameters for entity and filter keys
+   - Type-safe query building
+   - Automatic relation handling
+
+2. **Built-in Operations**
+   - `addOne`/`addMany`: Create single or multiple records
+   - `getById`: Fetch by primary key
+   - `getOneByQuery`/`getManyByQuery`: Search with filters
+   - `updateById`/`updateManyByQuery`: Update records
+   - `deleteById`/`deleteManyByQuery`: Soft delete records
+   - `countByQuery`: Count matching records
+
+### Implementation Example
+
+```typescript
+@Injectable()
+export class UserRepository extends BaseRepository<UserEntity, ['id', 'email', 'name']> {
+  constructor(
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
+  ) {
+    super(userRepository);
+  }
+
+  protected filterStrategies() {
+    return {
+      id: (value: number) => ({
+        id: value,
+      }),
+      email: (value: string) => ({
+        email: ILike(`%${value}%`),
+      }),
+      name: (value: string) => ({
+        name: ILike(`%${value}%`),
+      }),
+    };
+  }
+
+  protected getRelations(): string[] {
+    return [];
+  }
+}
+```
+
+## Filter Strategies
+
+Filter strategies define how query parameters are transformed into TypeORM filters.
+
+### Common Patterns
+
+1. **Exact Match**
+```typescript
+id: (value: number) => ({
+  id: value,
+})
+```
+
+2. **Case-Insensitive Search**
+```typescript
+name: (value: string) => ({
+  name: ILike(`%${value}%`),
+})
+```
+
+3. **Date Range**
+```typescript
+dateRange: (value: { start_date: Date; end_date: Date }) => ({
+  createdAt: Between(value.start_date, value.end_date),
+})
+```
+
+4. **Multiple Conditions**
+```typescript
+status: (value: string[]) => ({
+  status: In(value),
+})
+```
+
+## Best Practices
+
+1. **Extend BaseRepository**
+   - Always extend `BaseRepository` instead of creating new repositories from scratch
+   - Specify entity type and allowed filter keys as generic parameters
+
+2. **Filter Strategies**
+   - Define clear filter strategies for each queryable field
+   - Use TypeORM operators (Like, ILike, Between, In) for complex queries
+   - Keep transformations simple and maintainable
+
+3. **Relations**
+   - Override `getRelations()` to specify which relations to load
+   - Keep relations minimal to avoid performance issues
+
+4. **Query Usage**
+```typescript
+// Find one user by email
+const user = await userRepository.getOneByQuery({ email: 'user@example.com' });
+
+// Find multiple users with pagination
+const [users, total] = await userRepository.getManyByQuery(
+  { name: 'John' },
+  { skip: 0, take: 10 }
+);
+
+// Update multiple users
+const updated = await userRepository.updateManyByQuery(
+  { name: 'John' },
+  { status: 'inactive' }
+);
+
+// Delete users by query
+const deleted = await userRepository.deleteManyByQuery({ status: 'inactive' });
+```
+
+5. **Key Transformations**
+   - Use `getKeyTransformations()` for complex query parameter handling
+   - Combine multiple query parameters into single filters when needed
+
+## Common Pitfalls
+
+1. **Avoid Creating New Methods**
+   - Don't create new methods unless absolutely necessary
+   - Use existing base repository methods with appropriate filters
+
+2. **Performance Considerations**
+   - Be mindful of relation loading
+   - Use appropriate indexes for filtered fields
+   - Consider pagination for large result sets
+
+3. **Type Safety**
+   - Always specify correct generic types
+   - Use readonly arrays for filter keys
+
+   - Validate filter values before applying strategies

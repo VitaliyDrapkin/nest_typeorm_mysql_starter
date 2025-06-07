@@ -1,0 +1,151 @@
+---
+description: Guidelines and patterns for creating and maintaining NestJS services
+globs: 
+alwaysApply: false
+---
+---
+description: Guidelines and patterns for creating and maintaining NestJS services
+globs: src/**/*.service.ts
+---
+# NestJS Service Patterns
+
+This document outlines the standard patterns and best practices for creating and maintaining services in our NestJS application.
+
+## Service Structure
+
+1. Every service should:
+   - Be decorated with `@Injectable()`
+   - Have a descriptive name ending with `Service`
+   - Be placed in a `services/` directory within its module
+   - Follow dependency injection pattern
+
+2. Constructor Pattern:
+```typescript
+@Injectable()
+export class ExampleService {
+  constructor(
+    private readonly logger: LogService,
+    private readonly repository: Repository,
+  ) {
+    this.logger.setContext(`${this.constructor.name}`);
+  }
+}
+```
+
+## Best Practices
+
+1. **Dependency Injection**
+   - Inject dependencies through constructor
+   - Use `private readonly` for injected services
+   - Always include LogService for consistent logging
+
+2. **Method Patterns**
+   - Use async/await for all database operations
+   - Return DTOs using `plainToInstance` for consistent response transformation
+   - Include proper error handling
+   - Use descriptive method names that reflect their purpose
+
+3. **Response Transformation**
+```typescript
+// Good example
+async getById(id: number): Promise<UserResponseDto> {
+  const user = await this.repository.getById(id);
+  return plainToInstance(UserResponseDto, user, {
+    excludeExtraneousValues: true,
+  });
+}
+
+// Bad example
+async getById(id: number) {
+  return this.repository.getById(id); // Missing DTO transformation
+}
+```
+
+4. **Pagination Pattern**
+```typescript
+async getMany(
+  query: QueryDto,
+): Promise<PaginationResponseDto<ResponseDto>> {
+  const [items, total] = await this.repository.getManyByQuery(query);
+  return PaginationTransformer.toPaginationResponseDto(
+    items,
+    total,
+    query.take,
+    query.skip,
+    ResponseDto,
+  );
+}
+```
+
+## Module Integration
+
+1. Services should be:
+   - Declared in their module's `providers` array
+   - Exported if needed by other modules
+   - Imported only through module imports, never directly
+
+2. Example module structure:
+```typescript
+@Module({
+  imports: [RequiredModules],
+  providers: [ExampleService],
+  exports: [ExampleService],
+})
+export class ExampleModule {}
+```
+
+## Error Handling
+
+1. Use NestJS built-in exceptions:
+   - `NotFoundException` for missing resources
+   - `BadRequestException` for invalid inputs
+   - `UnauthorizedException` for auth failures
+   - `ForbiddenException` for permission issues
+
+2. Example error handling:
+```typescript
+async getById(id: number): Promise<UserResponseDto> {
+  const user = await this.repository.getById(id);
+  if (!user) {
+    throw new NotFoundException(`User with id ${id} not found`);
+  }
+  return plainToInstance(UserResponseDto, user, {
+    excludeExtraneousValues: true,
+  });
+}
+```
+
+## Logging
+
+1. Always use the LogService for consistent logging:
+   - Set context in constructor
+   - Use appropriate log levels (debug, info, warn, error)
+   - Include relevant context in log messages
+
+2. Example logging:
+```typescript
+async createUser(user: CreateUserDto): Promise<UserResponseDto> {
+  this.logger.debug(`Creating new user: ${user.email}`);
+  const createdUser = await this.repository.addOne(user);
+  this.logger.info(`User created successfully: ${createdUser.id}`);
+  return plainToInstance(UserResponseDto, createdUser, {
+    excludeExtraneousValues: true,
+  });
+}
+```
+```
+
+This rule file provides comprehensive guidance for creating and maintaining services in the NestJS application, based on the patterns shown in the `users.service.ts` and the project structure described in the README. The rule includes:
+
+1. Clear structure guidelines
+2. Best practices for dependency injection
+3. Response transformation patterns
+4. Pagination handling
+5. Error handling examples
+6. Logging patterns
+7. Module integration guidelines
+
+The rule is set to apply to all service files in the project through the glob pattern `src/**/*.service.ts`. You can save this file as `.cursor/rules/service-patterns.mdc` in your project.
+
+
+Would you like me to explain any specific part of the rule in more detail?

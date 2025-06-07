@@ -1,0 +1,79 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# NestJS Project - Master Rule Index
+
+This document serves as the central index for all active Cursor rules within this NestJS repository. These rules define processes, structures, and guidelines for development.
+
+## Core Architecture & Structure
+
+Fundamental project structure, setup, and general development guidelines.
+
+| Rule File                          | Description                                                 |
+| :--------------------------------- | :---------------------------------------------------------- |
+| @cursor-rules.mdc                  | How to add or edit Cursor rules in our project              |
+| @project-structure.mdc             | Project structure and file organization guidelines          |
+| @decorators.mdc                    | Custom decorator usage and implementation guidelines        |
+
+## Application Components
+
+Rules for implementing core NestJS components and features.
+
+| Rule File                          | Description                                                 |
+| :--------------------------------- | :---------------------------------------------------------- |
+| @controller-rule.mdc              | Controller implementation and API endpoint guidelines       |
+| @service-rule.mdc                 | Service layer implementation and business logic guidelines  |
+| @repository-rule.mdc              | Repository pattern implementation and database access rules |
+| @dto-rule.mdc                     | Data Transfer Object (DTO) implementation guidelines        |
+
+## Infrastructure & Utilities
+
+Rules for implementing infrastructure components and utilities.
+
+| Rule File                          | Description                                                 |
+| :--------------------------------- | :---------------------------------------------------------- |
+| @logger-rule.mdc                  | Logging implementation and best practices                   |
+
+## Usage Guidelines
+
+1. Each rule file contains detailed implementation guidelines, examples, and best practices
+2. Rules are designed to maintain consistency across the codebase
+3. Follow the guidelines in each rule file when implementing new features
+4. Rules can be referenced using the @ symbol followed by the rule filename
+
+## Rule Categories
+
+### Core Architecture
+- Project structure and organization
+- Module organization and dependencies
+- File naming conventions
+- Directory structure
+
+### Components
+- Controller implementation
+- Service layer patterns
+- Repository pattern usage
+- DTO structure and validation
+
+### Infrastructure
+- Logging configuration
+- Error handling
+- Custom decorators
+- Database access patterns
+
+## Best Practices
+
+1. Always check relevant rules before implementing new features
+2. Follow the established patterns for consistency
+3. Update rules when introducing new patterns or best practices
+4. Keep rules up to date with project evolution
+
+## Contributing to Rules
+
+1. Place new rules in the `.cursor/rules/` directory
+2. Follow the rule file naming convention (kebab-case.mdc)
+3. Include a clear description and examples
+
+4. Update this index when adding new rules

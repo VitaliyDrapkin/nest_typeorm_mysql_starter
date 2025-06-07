@@ -1,0 +1,151 @@
+---
+description: Guidelines for creating and using DTOs in NestJS modules
+globs: 
+alwaysApply: false
+---
+---
+description: Guidelines for creating and using DTOs in NestJS modules
+globs: src/**/dto/**/*.ts
+---
+# DTO Guidelines
+
+## Directory Structure
+
+DTOs should be organized in the following structure within each module:
+
+module/
+└── dto/
+├── queries/ # GET request parameters and filters
+├── requests/ # POST/PUT/PATCH request bodies
+└── responses/ # Response DTOs
+
+
+## DTO Naming Conventions
+
+1. Query DTOs: `[Entity]QueryDto` (e.g., `UserQueryDto`)
+2. Request DTOs: `[Action][Entity]Dto` (e.g., `CreateUserDto`, `UpdateUserDto`)
+3. Response DTOs: `[Entity]ResponseDto` (e.g., `UserResponseDto`)
+
+## Best Practices
+
+1. Always use class-validator decorators for validation
+2. Use class-transformer for serialization
+3. Implement proper inheritance for common fields
+4. Use interfaces for internal type definitions
+
+## Examples
+
+### 1. Query DTO with Pagination
+
+```typescript
+// queries/user-query.dto.ts
+import { IsOptional, IsString, IsEnum } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { PaginationDto } from '@shared/dtos/pagination.dto';
+
+export class UserQueryDto extends PaginationDto {
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => value?.trim())
+  search?: string;
+
+  @IsOptional()
+  @IsEnum(UserRole)
+  role?: UserRole;
+}
+```
+
+### 2. Request DTO
+
+```typescript
+// requests/create-user.dto.ts
+import { IsEmail, IsString, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+
+export class CreateUserDto {
+  @IsString()
+  @MinLength(2)
+  @Transform(({ value }) => value?.trim())
+  firstName: string;
+
+  @IsString()
+  @MinLength(2)
+  @Transform(({ value }) => value?.trim())
+  lastName: string;
+
+  @IsEmail()
+  @Transform(({ value }) => value?.toLowerCase().trim())
+  email: string;
+
+  @IsString()
+  @MinLength(8)
+  password: string;
+}
+```
+
+### 3. Response DTO
+
+```typescript
+// responses/user-response.dto.ts
+import { Exclude, Expose, Transform } from 'class-transformer';
+
+@Exclude()
+export class UserResponseDto {
+  @Expose()
+  id: string;
+
+  @Expose()
+  firstName: string;
+
+  @Expose()
+  lastName: string;
+
+  @Expose()
+  email: string;
+
+  @Expose()
+  @Transform(({ value }) => `${value.firstName} ${value.lastName}`)
+  fullName: string;
+
+  @Expose()
+  role: UserRole;
+
+  @Expose()
+  createdAt: Date;
+}
+```
+
+### 4. Using DTOs in Controllers
+
+```typescript
+// user.controller.ts
+import { Controller, Get, Post, Body, Query } from '@nestjs/common';
+import { UserQueryDto } from './dto/queries/user-query.dto';
+import { CreateUserDto } from './dto/requests/create-user.dto';
+import { UserResponseDto } from './dto/responses/user-response.dto';
+
+@Controller('users')
+export class UserController {
+  @Get()
+  async findAll(@Query() query: UserQueryDto): Promise<UserResponseDto[]> {
+    const users = await this.userService.findAll(query);
+    return plainToInstance(UserResponseDto, users);
+  }
+
+  @Post()
+  async create(@Body() createUserDto: CreateUserDto): Promise<UserResponseDto> {
+    const user = await this.userService.create(createUserDto);
+    return plainToInstance(UserResponseDto, user);
+  }
+}
+```
+
+## Important Notes
+
+1. Always use `plainToInstance` when transforming database entities to response DTOs
+2. Use `class-transformer` decorators to control serialization
+3. Implement proper validation using `class-validator`
+4. Keep DTOs focused and single-purpose
+5. Use inheritance to avoid code duplication
+
+6. Always document complex DTOs with JSDoc comments

@@ -1,0 +1,130 @@
+---
+description: NestJS Controller and DTO Structure Guidelines
+globs: 
+alwaysApply: false
+---
+---
+description: NestJS Controller and DTO Structure Guidelines
+globs: src/modules/**/controllers/*.ts,src/modules/**/dto/**/*.ts
+---
+# NestJS Controller and DTO Structure Guidelines
+
+This document outlines the best practices for structuring NestJS controllers and DTOs in our project.
+
+## Controller Structure
+
+1. File Location:
+   - Place controllers in `src/modules/{module-name}/controllers/`
+   - Name files as `{feature}.controller.ts`
+
+2. Controller Decorators:
+   - Always use `@Controller()` with a meaningful route prefix
+   - Use `@ApiTags()` for Swagger documentation
+   - Group related endpoints logically
+
+3. Method Organization:
+   - Group CRUD operations together
+   - Use appropriate HTTP method decorators (`@Get`, `@Post`, `@Put`, `@Delete`)
+   - Include proper parameter decorators (`@Body`, `@Param`, `@Query`)
+
+Example:
+```typescript
+@ApiTags('users')
+@Controller('users')
+export class UsersController {
+  constructor(private readonly service: UsersService) {}
+
+  @Get()
+  async findAll(@Query() query: GetUsersQueryDto): Promise<PaginationResponseDto<UserResponseDto>> {
+    return this.service.findAll(query);
+  }
+
+  @Get(':id')
+  async findOne(@Param('id') id: number): Promise<UserResponseDto> {
+    return this.service.findOne(id);
+  }
+}
+```
+
+## DTO Structure
+
+1. Directory Organization:
+   ```
+   dto/
+   ├── queries/      # GET request parameters
+   ├── requests/     # POST/PUT/PATCH request bodies
+   └── responses/    # Response DTOs
+   ```
+
+2. Naming Conventions:
+   - Query DTOs: `{Feature}QueryDto` (e.g., `GetUsersQueryDto`)
+   - Request DTOs: `{Action}{Feature}RequestDto` (e.g., `CreateUserRequestDto`)
+   - Response DTOs: `{Feature}ResponseDto` (e.g., `UserResponseDto`)
+
+3. DTO Best Practices:
+   - Use class-validator decorators for validation
+   - Use class-transformer for response transformation
+   - Extend base DTOs when appropriate
+   - Include proper Swagger decorators
+
+Example:
+```typescript
+// request.dto.ts
+export class CreateUserRequestDto {
+  @IsString()
+  @IsNotEmpty()
+  @ApiProperty()
+  name: string;
+
+  @IsEmail()
+  @ApiProperty()
+  email: string;
+}
+
+// response.dto.ts
+export class UserResponseDto {
+  @Expose()
+  @ApiProperty()
+  id: number;
+
+  @Expose()
+  @ApiProperty()
+  name: string;
+}
+```
+
+## Type Safety Guidelines
+
+1. Always use TypeScript types/interfaces for:
+   - Service method parameters and returns
+   - Controller method parameters and returns
+   - DTO properties
+
+2. Use proper type imports:
+   - Import types from their respective modules
+   - Use absolute imports with `@src/` prefix
+   - Avoid circular dependencies
+
+3. Response Types:
+   - Use `PaginationResponseDto<T>` for paginated responses
+   - Use specific response DTOs for single-item responses
+   - Include proper error response types
+
+## Common Patterns
+
+1. Pagination:
+   - Use `PaginationResponseDto<T>` for list endpoints
+   - Include `page`, `limit`, and `total` in responses
+   - Use query DTOs for pagination parameters
+
+2. Error Handling:
+   - Use global exception filters
+   - Return consistent error response structures
+   - Include proper HTTP status codes
+
+3. Documentation:
+   - Use Swagger decorators (`@ApiTags`, `@ApiProperty`)
+   - Include method descriptions
+
+
+   - Document all DTO properties

@@ -1,0 +1,146 @@
+---
+description: Guidelines for using the logging service in NestJS applications
+globs: 
+alwaysApply: false
+---
+---
+description: Guidelines for using the logging service in NestJS applications
+globs: src/**/*.ts
+---
+# Logger Usage Guidelines
+
+This project uses a Winston-based logging service that supports multiple log levels and file output. Follow these guidelines for consistent logging across the application.
+
+## Log Levels
+
+The logger supports the following levels (from most to least verbose):
+
+- `debug` - Detailed information for debugging
+- `log` (info) - General operational information
+- `warn` - Warning messages for potentially harmful situations
+- `error` - Error events that might still allow the application to continue running
+
+## Basic Usage
+
+1. Inject the LogService in your class:
+
+```typescript
+import { LogService } from 'src/core/logger/log-service';
+
+@Injectable()
+export class YourService {
+  constructor(private readonly logger: LogService) {
+    // Set context for all logs in this service
+    this.logger.setContext('YourService');
+  }
+}
+```
+
+2. Use different log levels:
+
+```typescript
+// Debug level - detailed information
+this.logger.debug('Processing request', { requestId: '123' });
+
+// Info level - general information
+this.logger.log('User logged in', { userId: '456' });
+
+// Warning level - potential issues
+this.logger.warn('Rate limit approaching', { current: 95, limit: 100 });
+
+// Error level - errors that need attention
+this.logger.error('Failed to process payment', { 
+  error: error.message,
+  paymentId: '789'
+});
+```
+
+## Best Practices
+
+1. **Context Setting**
+   - Always set the context in the constructor
+   - Use the service/class name as context
+   - Context helps identify the source of logs
+
+2. **Message Format**
+   - Use clear, descriptive messages
+   - Include relevant data in the meta object
+   - Avoid logging sensitive information
+
+3. **Error Logging**
+   - Always include error details in meta
+   - Log both the error message and stack trace when available
+   - Include relevant context data
+
+4. **Meta Data**
+   - Use objects for structured logging
+   - Include relevant IDs and context
+   - Keep meta data concise and relevant
+
+## Configuration
+
+Logging behavior can be configured in `.env`:
+
+```env
+# Set minimum log level (debug, info, warn, error)
+LOG_LEVEL=info
+
+# Enable file logging
+LOG_TO_FILE=true
+```
+
+When `LOG_TO_FILE` is enabled, logs are written to:
+- `logs/combined.log` - All logs (info and above)
+- `logs/error.log` - Error logs only
+
+## Examples
+
+### Good Examples
+
+```typescript
+// Service initialization
+@Injectable()
+export class UserService {
+  constructor(private readonly logger: LogService) {
+    this.logger.setContext('UserService');
+  }
+
+  async createUser(userData: CreateUserDto) {
+    this.logger.log('Creating new user', { email: userData.email });
+    try {
+      const user = await this.userRepository.save(userData);
+      this.logger.log('User created successfully', { userId: user.id });
+      return user;
+    } catch (error) {
+      this.logger.error('Failed to create user', {
+        error: error.message,
+        email: userData.email
+      });
+      throw error;
+    }
+  }
+}
+```
+
+### Bad Examples
+
+```typescript
+// ❌ Don't log sensitive data
+this.logger.log('User data', { password: user.password });
+
+// ❌ Don't use vague messages
+this.logger.log('Something happened');
+
+// ❌ Don't forget context
+this.logger.log('Operation completed');
+
+// ❌ Don't log without relevant meta data
+this.logger.error('Error occurred');
+```
+
+## Integration with Interceptors
+
+The project includes a built-in logger interceptor that automatically logs HTTP requests and responses. It's configured in the core module and doesn't require additional setup.
+
+
+Remember: The logger is a transient service, meaning each injection gets its own instance. This allows for proper context isolation between different parts of the application.

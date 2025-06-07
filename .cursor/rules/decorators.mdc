@@ -1,0 +1,129 @@
+---
+description: Guidelines for using common decorators in NestJS controllers
+globs: 
+alwaysApply: false
+---
+---
+description: Guidelines for using common decorators in NestJS controllers
+globs: src/**/*.controller.ts
+---
+# Common Decorators Usage Guidelines
+
+This document outlines the usage of common decorators available in the project for controllers and routes.
+
+## Available Decorators
+
+### 1. @CurrentUser()
+Extracts the authenticated user from the JWT token. The user object is automatically injected by the `CurrentUserInterceptor`.
+
+```typescript
+// Example usage in a controller
+@Controller('users')
+export class UsersController {
+  @Get('profile')
+  getProfile(@CurrentUser() user: User) {
+    return user;
+  }
+}
+```
+
+### 2. @CustomTimeout()
+Sets a custom timeout for a specific route. Useful for long-running operations.
+
+```typescript
+// Example usage in a controller
+@Controller('reports')
+export class ReportsController {
+  @Get('generate')
+  @CustomTimeout(30000) // 30 seconds timeout
+  async generateReport() {
+    // Long-running report generation
+  }
+}
+```
+
+### 3. @Public()
+Marks a route as publicly accessible, bypassing JWT authentication.
+
+```typescript
+// Example usage in a controller
+@Controller('auth')
+export class AuthController {
+  @Post('login')
+  @Public()
+  async login(@Body() loginDto: LoginDto) {
+    // Public login endpoint
+  }
+}
+```
+
+### 4. @Roles()
+Restricts access to routes based on user roles. Must be used with the `RolesGuard`.
+
+```typescript
+// Example usage in a controller
+@Controller('admin')
+export class AdminController {
+  @Get('dashboard')
+  @Roles(RoleEnum.ADMIN)
+  async getDashboard() {
+    // Only accessible by admins
+  }
+
+  @Get('reports')
+  @Roles(RoleEnum.ADMIN, RoleEnum.MANAGER)
+  async getReports() {
+    // Accessible by both admins and managers
+  }
+}
+```
+
+## Best Practices
+
+1. Always use `@Public()` for authentication-related endpoints (login, register, etc.)
+2. Use `@Roles()` in combination with `@UseGuards(RolesGuard)` for role-based access control
+3. Apply `@CustomTimeout()` only when necessary for long-running operations
+4. Use `@CurrentUser()` to access the authenticated user's data in protected routes
+
+## Common Patterns
+
+### Combining Decorators
+```typescript
+@Controller('admin')
+export class AdminController {
+  @Get('user/:id')
+  @Roles(RoleEnum.ADMIN)
+  @CustomTimeout(5000)
+  async getUserDetails(
+    @Param('id') id: string,
+    @CurrentUser() admin: User
+  ) {
+    // Protected route with custom timeout
+  }
+}
+```
+
+### Public Routes with Custom Timeout
+```typescript
+@Controller('public')
+export class PublicController {
+  @Get('status')
+  @Public()
+  @CustomTimeout(1000)
+  async getStatus() {
+    // Public route with quick timeout
+  }
+}
+```
+```
+
+This cursor rule provides comprehensive documentation for the common decorators, including:
+1. Detailed explanations of each decorator's purpose
+2. Code examples showing how to use them in controllers
+3. Best practices for decorator usage
+4. Common patterns for combining multiple decorators
+
+The rule will be automatically applied when working with controller files (matching the glob pattern `src/**/*.controller.ts`), helping developers understand and properly use the decorators in their code.
+
+
+Would you like me to make any adjustments to the rule or add more specific examples?
