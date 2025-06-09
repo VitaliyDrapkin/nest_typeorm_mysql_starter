@@ -23,10 +23,11 @@ Rules for implementing core NestJS components and features.
 
 | Rule File                          | Description                                                 |
 | :--------------------------------- | :---------------------------------------------------------- |
-| @controller-rule.mdc              | Controller implementation and API endpoint guidelines       |
-| @service-rule.mdc                 | Service layer implementation and business logic guidelines  |
-| @repository-rule.mdc              | Repository pattern implementation and database access rules |
-| @dto-rule.mdc                     | Data Transfer Object (DTO) implementation guidelines        |
+| @entity-rule.mdc                   | TypeORM entity implementation and database model guidelines |
+| @service-rule.mdc                  | Service layer implementation and business logic guidelines  |
+| @controller-rule.mdc               | Controller implementation and API endpoint guidelines       |
+| @repository-rule.mdc               | Repository pattern implementation and database access rules |
+| @dto-rule.mdc                      | Data Transfer Object (DTO) implementation guidelines        |
 
 ## Infrastructure & Utilities
 
@@ -34,7 +35,7 @@ Rules for implementing infrastructure components and utilities.
 
 | Rule File                          | Description                                                 |
 | :--------------------------------- | :---------------------------------------------------------- |
-| @logger-rule.mdc                  | Logging implementation and best practices                   |
+| @logger-rule.mdc                   | Logging implementation and best practices                   |
 
 ## Usage Guidelines
 

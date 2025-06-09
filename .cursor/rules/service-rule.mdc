@@ -11,6 +11,23 @@ globs: src/**/*.service.ts
 
 This document outlines the standard patterns and best practices for creating and maintaining services in our NestJS application.
 
+## Core Principle
+
+**Services contain ALL business logic and orchestration. They MUST use ONLY the base repository's built-in operations. DO NOT create custom repository methods for simple queries - use filters instead.**
+
+## Base Repository Built-in Operations
+
+All repositories extend `BaseRepository` which provides these complete operations:
+
+- `addOne(data)` / `addMany(data[])`: Create single or multiple records
+- `getById(id)`: Fetch by primary key
+- `getOneByQuery(filters)` / `getManyByQuery(filters, options?)`: Search with filters
+- `updateById(id, data)` / `updateManyByQuery(filters, data)`: Update records
+- `deleteById(id)` / `deleteManyByQuery(filters)`: Soft delete records
+- `countByQuery(filters)`: Count matching records
+
+**These operations are sufficient for 95% of all data access needs. Use them directly in services.**
+
 ## Service Structure
 
 1. Every service should:
@@ -18,6 +35,7 @@ This document outlines the standard patterns and best practices for creating and
    - Have a descriptive name ending with `Service`
    - Be placed in a `services/` directory within its module
    - Follow dependency injection pattern
+   - Handle all business logic and validation
 
 2. Constructor Pattern:
 ```typescript
@@ -25,55 +43,417 @@ This document outlines the standard patterns and best practices for creating and
 export class ExampleService {
   constructor(
     private readonly logger: LogService,
-    private readonly repository: Repository,
+    private readonly repository: ExampleRepository,
   ) {
     this.logger.setContext(`${this.constructor.name}`);
   }
 }
 ```
 
-## Best Practices
+## Repository Usage in Services
 
-1. **Dependency Injection**
-   - Inject dependencies through constructor
-   - Use `private readonly` for injected services
-   - Always include LogService for consistent logging
+**ALWAYS use base repository built-in operations with filters. NEVER create custom repository methods for simple queries.**
 
-2. **Method Patterns**
-   - Use async/await for all database operations
-   - Return DTOs using `plainToInstance` for consistent response transformation
-   - Include proper error handling
-   - Use descriptive method names that reflect their purpose
+### Preferred Patterns - Using Built-in Operations
 
-3. **Response Transformation**
+1. **Get Single Record with Filters**
 ```typescript
-// Good example
-async getById(id: number): Promise<UserResponseDto> {
-  const user = await this.repository.getById(id);
+// CORRECT - Use built-in getOneByQuery with filters
+async getUserByEmail(email: string): Promise<UserResponseDto> {
+  const user = await this.userRepository.getOneByQuery({ email });
+  if (!user) {
+    throw new NotFoundException(`User with email ${email} not found`);
+  }
   return plainToInstance(UserResponseDto, user, {
     excludeExtraneousValues: true,
   });
 }
 
-// Bad example
-async getById(id: number) {
-  return this.repository.getById(id); // Missing DTO transformation
+// CORRECT - Get by ID using built-in operation
+async getUserById(id: number): Promise<UserResponseDto> {
+  const user = await this.userRepository.getById(id);
+  if (!user) {
+    throw new NotFoundException(`User with id ${id} not found`);
+  }
+  return plainToInstance(UserResponseDto, user, {
+    excludeExtraneousValues: true,
+  });
 }
 ```
+
+2. **Get Multiple Records with Complex Filters**
+```typescript
+// CORRECT - Use built-in getManyByQuery with complex filters
+async getActiveUsersByRole(role: string, city?: string): Promise<UserResponseDto[]> {
+  const filters: any = { 
+    status: ['active'], 
+    role 
+  };
+  
+  if (city) {
+    filters.city = city;
+  }
+  
+  const users = await this.userRepository.getManyByQuery(filters);
+  return users.map(user => plainToInstance(UserResponseDto, user, {
+    excludeExtraneousValues: true,
+  }));
+}
+
+// CORRECT - Pagination with built-in operations
+async getUsersWithPagination(
+  filters: any,
+  skip: number,
+  take: number
+): Promise<[UserResponseDto[], number]> {
+  const [users, total] = await this.userRepository.getManyByQuery(
+    filters,
+    { skip, take }
+  );
+  
+  const userDtos = users.map(user => plainToInstance(UserResponseDto, user, {
+    excludeExtraneousValues: true,
+  }));
+  
+  return [userDtos, total];
+}
+```
+
+3. **Create Records with Built-in Operations**
+```typescript
+// CORRECT - Use built-in addOne for single record
+async createUser(userData: CreateUserDto): Promise<UserResponseDto> {
+  // Business logic: Check if user already exists
+  const existingUser = await this.userRepository.getOneByQuery({ 
+    email: userData.email 
+  });
+  
+  if (existingUser) {
+    throw new BadRequestException('User with this email already exists');
+  }
+  
+  // Business logic: Process data
+  const hashedPassword = await this.hashPassword(userData.password);
+  
+  // Use built-in addOne operation
+  const user = await this.userRepository.addOne({
+    ...userData,
+    password: hashedPassword,
+    status: 'active',
+  });
+  
+  this.logger.info(`User created successfully: ${user.id}`);
+  
+  return plainToInstance(UserResponseDto, user, {
+    excludeExtraneousValues: true,
+  });
+}
+
+// CORRECT - Use built-in addMany for bulk creation
+async createMultipleUsers(usersData: CreateUserDto[]): Promise<UserResponseDto[]> {
+  // Business logic: Validate all emails are unique
+  const emails = usersData.map(u => u.email);
+  const existingUsers = await this.userRepository.getManyByQuery({
+    email: emails
+  });
+  
+  if (existingUsers.length > 0) {
+    throw new BadRequestException('Some users already exist');
+  }
+  
+  // Process all user data
+  const processedUsers = await Promise.all(
+    usersData.map(async (userData) => ({
+      ...userData,
+      password: await this.hashPassword(userData.password),
+      status: 'active',
+    }))
+  );
+  
+  // Use built-in addMany operation
+  const users = await this.userRepository.addMany(processedUsers);
+  
+  this.logger.info(`Created ${users.length} users successfully`);
+  
+  return users.map(user => plainToInstance(UserResponseDto, user, {
+    excludeExtraneousValues: true,
+  }));
+}
+```
+
+4. **Update Records with Built-in Operations**
+```typescript
+// CORRECT - Use built-in updateById for single record
+async updateUser(id: number, updateData: UpdateUserDto): Promise<UserResponseDto> {
+  // Business logic: Check if user exists
+  const existingUser = await this.userRepository.getById(id);
+  if (!existingUser) {
+    throw new NotFoundException(`User with id ${id} not found`);
+  }
+  
+  // Business logic: Validate update
+  if (updateData.email && updateData.email !== existingUser.email) {
+    const emailExists = await this.userRepository.getOneByQuery({
+      email: updateData.email
+    });
+    if (emailExists) {
+      throw new BadRequestException('Email already in use');
+    }
+  }
+  
+  // Use built-in updateById operation
+  const updatedUser = await this.userRepository.updateById(id, {
+    ...updateData,
+    updatedAt: new Date(),
+  });
+  
+  this.logger.info(`User ${id} updated successfully`);
+  
+  return plainToInstance(UserResponseDto, updatedUser, {
+    excludeExtraneousValues: true,
+  });
+}
+
+// CORRECT - Use built-in updateManyByQuery for bulk updates
+async deactivateOldUsers(): Promise<number> {
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  
+  // Use built-in updateManyByQuery operation
+  const result = await this.userRepository.updateManyByQuery(
+    { lastLoginDate: { end: sixMonthsAgo } },
+    { status: 'inactive', deactivatedAt: new Date() }
+  );
+  
+  this.logger.info(`Deactivated ${result.affected} inactive users`);
+  return result.affected;
+}
+```
+
+5. **Delete Records with Built-in Operations**
+```typescript
+// CORRECT - Use built-in deleteById for single record
+async deleteUser(id: number): Promise<void> {
+  // Business logic: Check if user exists
+  const user = await this.userRepository.getById(id);
+  if (!user) {
+    throw new NotFoundException(`User with id ${id} not found`);
+  }
+  
+  // Business logic: Check if user can be deleted
+  if (user.role === 'admin') {
+    throw new BadRequestException('Cannot delete admin users');
+  }
+  
+  // Use built-in deleteById operation (soft delete)
+  await this.userRepository.deleteById(id);
+  
+  this.logger.info(`User ${id} deleted successfully`);
+}
+
+// CORRECT - Use built-in deleteManyByQuery for bulk deletions
+async cleanupInactiveUsers(): Promise<number> {
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+  
+  // Use built-in deleteManyByQuery operation
+  const result = await this.userRepository.deleteManyByQuery({
+    status: ['inactive'],
+    lastLoginDate: { end: oneYearAgo }
+  });
+  
+  this.logger.info(`Cleaned up ${result.affected} inactive users`);
+  return result.affected;
+}
+```
+
+6. **Count Records with Built-in Operations**
+```typescript
+// CORRECT - Use built-in countByQuery operation
+async getUserStatistics(): Promise<UserStatsDto> {
+  const [activeCount, inactiveCount, totalCount] = await Promise.all([
+    this.userRepository.countByQuery({ status: ['active'] }),
+    this.userRepository.countByQuery({ status: ['inactive'] }),
+    this.userRepository.countByQuery({})
+  ]);
+  
+  return {
+    active: activeCount,
+    inactive: inactiveCount,
+    total: totalCount,
+    percentage: totalCount > 0 ? (activeCount / totalCount) * 100 : 0
+  };
+}
+```
+
+### What NOT to Do - Avoid Custom Repository Methods
+
+❌ **NEVER create custom repository methods for simple queries**
+```typescript
+// BAD - Creating unnecessary repository method
+// In Repository (DON'T DO THIS)
+async findUserByEmail(email: string): Promise<UserEntity> {
+  return this.getOneByQuery({ email }); // This is just wrapping built-in method!
+}
+
+async findActiveUsers(): Promise<UserEntity[]> {
+  return this.getManyByQuery({ status: ['active'] }); // Unnecessary wrapper!
+}
+
+async updateUserStatus(id: number, status: string): Promise<UserEntity> {
+  return this.updateById(id, { status }); // Just use built-in method directly!
+}
+
+// In Service (DON'T DO THIS)
+async getUserByEmail(email: string): Promise<UserResponseDto> {
+  const user = await this.userRepository.findUserByEmail(email); // BAD - unnecessary method
+  // ... rest of logic
+}
+```
+
+✅ **ALWAYS use built-in operations directly**
+```typescript
+// GOOD - Use built-in operations directly in service
+async getUserByEmail(email: string): Promise<UserResponseDto> {
+  const user = await this.userRepository.getOneByQuery({ email }); // GOOD - direct built-in method
+  if (!user) {
+    throw new NotFoundException(`User with email ${email} not found`);
+  }
+  return plainToInstance(UserResponseDto, user, {
+    excludeExtraneousValues: true,
+  });
+}
+
+async getActiveUsers(): Promise<UserResponseDto[]> {
+  const users = await this.userRepository.getManyByQuery({ status: ['active'] }); // GOOD - direct built-in method
+  return users.map(user => plainToInstance(UserResponseDto, user, {
+    excludeExtraneousValues: true,
+  }));
+}
+```
+
+## Best Practices
+
+1. **Business Logic Placement**
+   - All validation logic belongs in services
+   - All data transformation belongs in services
+   - All orchestration between multiple repositories belongs in services
+   - Repositories ONLY handle data access through built-in operations and filter strategies
+
+2. **Built-in Operations Usage**
+   - Use `getById(id)` for single record by primary key
+   - Use `getOneByQuery(filters)` for single record by any criteria
+   - Use `getManyByQuery(filters, options?)` for multiple records with optional pagination
+   - Use `addOne(data)` for creating single records
+   - Use `addMany(data[])` for bulk creation
+   - Use `updateById(id, data)` for updating single records
+   - Use `updateManyByQuery(filters, data)` for bulk updates
+   - Use `deleteById(id)` for soft deleting single records
+   - Use `deleteManyByQuery(filters)` for bulk soft deletions
+   - Use `countByQuery(filters)` for counting records
+   - ONLY create custom repository methods for complex QueryBuilder operations that cannot be achieved with filters
+
+3. **Filter Usage**
+   - Build filter objects dynamically based on service parameters
+   - Use repository filter strategies for complex query transformations
+   - Combine multiple filter criteria in a single object
+   - Let the repository handle the TypeORM query building through filter strategies
 
 4. **Pagination Pattern**
 ```typescript
 async getMany(
-  query: QueryDto,
-): Promise<PaginationResponseDto<ResponseDto>> {
-  const [items, total] = await this.repository.getManyByQuery(query);
+  query: UserQueryDto,
+): Promise<PaginationResponseDto<UserResponseDto>> {
+  // Build filters based on query parameters
+  const filters: any = {};
+  
+  if (query.name) filters.name = query.name;
+  if (query.status) filters.status = query.status;
+  if (query.role) filters.role = query.role;
+  if (query.dateRange) filters.createdAt = query.dateRange;
+  
+  // Use built-in getManyByQuery with pagination options
+  const [items, total] = await this.repository.getManyByQuery(
+    filters,
+    { skip: query.skip, take: query.take }
+  );
+  
   return PaginationTransformer.toPaginationResponseDto(
     items,
     total,
     query.take,
     query.skip,
-    ResponseDto,
+    UserResponseDto,
   );
+}
+```
+
+## Error Handling
+
+1. Use NestJS built-in exceptions:
+   - `NotFoundException` for missing resources
+   - `BadRequestException` for invalid inputs
+   - `UnauthorizedException` for auth failures
+   - `ForbiddenException` for permission issues
+   - `ConflictException` for duplicate resources
+
+2. Example error handling with built-in operations:
+```typescript
+async updateUserStatus(id: number, status: string): Promise<UserResponseDto> {
+  // Check if user exists using built-in getById
+  const user = await this.repository.getById(id);
+  if (!user) {
+    throw new NotFoundException(`User with id ${id} not found`);
+  }
+  
+  // Business logic validation
+  if (!this.isValidStatusTransition(user.status, status)) {
+    throw new BadRequestException(`Cannot change status from ${user.status} to ${status}`);
+  }
+  
+  // Update using built-in updateById
+  const updatedUser = await this.repository.updateById(id, { 
+    status,
+    statusChangedAt: new Date(),
+  });
+  
+  this.logger.info(`User ${id} status changed to ${status}`);
+  
+  return plainToInstance(UserResponseDto, updatedUser, {
+    excludeExtraneousValues: true,
+  });
+}
+```
+
+## Logging
+
+1. Always use the LogService for consistent logging:
+   - Set context in constructor
+   - Use appropriate log levels (debug, info, warn, error)
+   - Include relevant context in log messages
+   - Log business operations, not just data access
+
+2. Example logging:
+```typescript
+async createUser(userData: CreateUserDto): Promise<UserResponseDto> {
+  this.logger.debug(`Creating new user: ${userData.email}`);
+  
+  // Business logic with logging
+  const existingUser = await this.repository.getOneByQuery({ 
+    email: userData.email 
+  });
+  
+  if (existingUser) {
+    this.logger.warn(`Attempt to create duplicate user: ${userData.email}`);
+    throw new BadRequestException('User already exists');
+  }
+  
+  const createdUser = await this.repository.addOne(userData);
+  this.logger.info(`User created successfully: ${createdUser.id}`);
+  
+  return plainToInstance(UserResponseDto, createdUser, {
+    excludeExtraneousValues: true,
+  });
 }
 ```
 
@@ -87,53 +467,23 @@ async getMany(
 2. Example module structure:
 ```typescript
 @Module({
-  imports: [RequiredModules],
-  providers: [ExampleService],
-  exports: [ExampleService],
+  imports: [TypeOrmModule.forFeature([UserEntity])],
+  providers: [UserService, UserRepository],
+  exports: [UserService],
 })
-export class ExampleModule {}
+export class UserModule {}
 ```
 
-## Error Handling
+## Summary
 
-1. Use NestJS built-in exceptions:
-   - `NotFoundException` for missing resources
-   - `BadRequestException` for invalid inputs
-   - `UnauthorizedException` for auth failures
-   - `ForbiddenException` for permission issues
-
-2. Example error handling:
-```typescript
-async getById(id: number): Promise<UserResponseDto> {
-  const user = await this.repository.getById(id);
-  if (!user) {
-    throw new NotFoundException(`User with id ${id} not found`);
-  }
-  return plainToInstance(UserResponseDto, user, {
-    excludeExtraneousValues: true,
-  });
-}
-```
-
-## Logging
-
-1. Always use the LogService for consistent logging:
-   - Set context in constructor
-   - Use appropriate log levels (debug, info, warn, error)
-   - Include relevant context in log messages
-
-2. Example logging:
-```typescript
-async createUser(user: CreateUserDto): Promise<UserResponseDto> {
-  this.logger.debug(`Creating new user: ${user.email}`);
-  const createdUser = await this.repository.addOne(user);
-  this.logger.info(`User created successfully: ${createdUser.id}`);
-  return plainToInstance(UserResponseDto, createdUser, {
-    excludeExtraneousValues: true,
-  });
-}
-```
-```
+- **Services**: Handle ALL business logic, validation, and orchestration
+- **Use ONLY Built-in Operations**: `getById`, `getOneByQuery`, `getManyByQuery`, `addOne`, `addMany`, `updateById`, `updateManyByQuery`, `deleteById`, `deleteManyByQuery`, `countByQuery`
+- **NO Custom Repository Methods**: For simple queries - use filters with built-in operations instead
+- **Custom Repository Methods**: ONLY for complex QueryBuilder operations that cannot be achieved with filters
+- **Transform Responses**: Always return DTOs, never raw entities
+- **Handle Errors**: Use appropriate NestJS exceptions with meaningful messages
+- **Log Operations**: Log business operations and important state changes
+- **Filter-Based Queries**: Build dynamic filter objects and let repository filter strategies handle the complexity
 
 This rule file provides comprehensive guidance for creating and maintaining services in the NestJS application, based on the patterns shown in the `users.service.ts` and the project structure described in the README. The rule includes:
 

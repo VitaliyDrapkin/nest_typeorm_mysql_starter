@@ -115,7 +115,46 @@ export class UserResponseDto {
 }
 ```
 
-### 4. Using DTOs in Controllers
+### 4. Update DTO Extending Create DTO
+
+When creating update DTOs, extend from the create DTO using `PartialType` and `OmitType` to avoid code duplication:
+
+```typescript
+// requests/update-user.request.dto.ts
+import { OmitType, PartialType } from '@nestjs/swagger';
+import { CreateUserRequestDto } from './create-user.request.dto';
+
+export class UpdateUserRequestDto extends PartialType(
+  OmitType(CreateUserRequestDto, ['password']),
+) {}
+```
+
+**Benefits of this approach:**
+- **DRY Principle**: Avoids duplicating validation rules and field definitions
+- **Consistency**: Ensures update operations use the same validation as create operations
+- **Maintainability**: Changes to create DTO automatically apply to update DTO
+- **Flexibility**: Use `OmitType` to exclude fields that shouldn't be updated (like passwords, IDs)
+- **Optional Fields**: `PartialType` makes all fields optional for partial updates
+
+**Common patterns:**
+```typescript
+// For full updates (all fields optional)
+export class UpdateUserDto extends PartialType(CreateUserDto) {}
+
+// For updates excluding sensitive fields
+export class UpdateUserDto extends PartialType(
+  OmitType(CreateUserDto, ['password', 'email']),
+) {}
+
+// For updates with additional fields
+export class UpdateUserDto extends PartialType(CreateUserDto) {
+  @IsOptional()
+  @IsDate()
+  lastLoginAt?: Date;
+}
+```
+
+### 5. Using DTOs in Controllers
 
 ```typescript
 // user.controller.ts

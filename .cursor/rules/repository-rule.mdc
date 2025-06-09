@@ -11,9 +11,13 @@ globs: src/**/repositories/*.ts
 
 This document outlines best practices for implementing and using repositories in our NestJS application.
 
+## Core Principle
+
+**Repositories should ONLY handle data access patterns and filters. All business logic belongs in services.**
+
 ## Base Repository Usage
 
-The `BaseRepository` class provides a robust foundation for all repositories. It includes common CRUD operations and query filtering capabilities.
+The `BaseRepository` class provides a complete foundation for all repositories. It includes all necessary CRUD operations and query filtering capabilities.
 
 ### Key Features
 
@@ -30,11 +34,11 @@ The `BaseRepository` class provides a robust foundation for all repositories. It
    - `deleteById`/`deleteManyByQuery`: Soft delete records
    - `countByQuery`: Count matching records
 
-### Implementation Example
+### Standard Implementation
 
 ```typescript
 @Injectable()
-export class UserRepository extends BaseRepository<UserEntity, ['id', 'email', 'name']> {
+export class UserRepository extends BaseRepository<UserEntity, ['id', 'email', 'name', 'status', 'createdAt']> {
   constructor(
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
@@ -53,20 +57,26 @@ export class UserRepository extends BaseRepository<UserEntity, ['id', 'email', '
       name: (value: string) => ({
         name: ILike(`%${value}%`),
       }),
+      status: (value: string[]) => ({
+        status: In(value),
+      }),
+      createdAt: (value: { start: Date; end: Date }) => ({
+        createdAt: Between(value.start, value.end),
+      }),
     };
   }
 
   protected getRelations(): string[] {
-    return [];
+    return ['profile', 'roles']; // Only load necessary relations
   }
 }
 ```
 
-## Filter Strategies
+## Filter Strategies - The Core Responsibility
 
-Filter strategies define how query parameters are transformed into TypeORM filters.
+Filter strategies are the PRIMARY responsibility of repositories. They define how query parameters are transformed into TypeORM filters.
 
-### Common Patterns
+### Common Filter Patterns
 
 1. **Exact Match**
 ```typescript
@@ -82,73 +92,143 @@ name: (value: string) => ({
 })
 ```
 
-3. **Date Range**
+3. **Date Range Filtering**
 ```typescript
-dateRange: (value: { start_date: Date; end_date: Date }) => ({
-  createdAt: Between(value.start_date, value.end_date),
+dateRange: (value: { start: Date; end: Date }) => ({
+  createdAt: Between(value.start, value.end),
 })
 ```
 
-4. **Multiple Conditions**
+4. **Multiple Values (Array)**
 ```typescript
 status: (value: string[]) => ({
   status: In(value),
 })
 ```
 
-## Best Practices
-
-1. **Extend BaseRepository**
-   - Always extend `BaseRepository` instead of creating new repositories from scratch
-   - Specify entity type and allowed filter keys as generic parameters
-
-2. **Filter Strategies**
-   - Define clear filter strategies for each queryable field
-   - Use TypeORM operators (Like, ILike, Between, In) for complex queries
-   - Keep transformations simple and maintainable
-
-3. **Relations**
-   - Override `getRelations()` to specify which relations to load
-   - Keep relations minimal to avoid performance issues
-
-4. **Query Usage**
+5. **Complex Nested Filters**
 ```typescript
-// Find one user by email
-const user = await userRepository.getOneByQuery({ email: 'user@example.com' });
-
-// Find multiple users with pagination
-const [users, total] = await userRepository.getManyByQuery(
-  { name: 'John' },
-  { skip: 0, take: 10 }
-);
-
-// Update multiple users
-const updated = await userRepository.updateManyByQuery(
-  { name: 'John' },
-  { status: 'inactive' }
-);
-
-// Delete users by query
-const deleted = await userRepository.deleteManyByQuery({ status: 'inactive' });
+userProfile: (value: { age: number; city: string }) => ({
+  profile: {
+    age: MoreThanOrEqual(value.age),
+    city: ILike(`%${value.city}%`),
+  },
+})
 ```
 
-5. **Key Transformations**
-   - Use `getKeyTransformations()` for complex query parameter handling
-   - Combine multiple query parameters into single filters when needed
+## When to Create New Methods
 
-## Common Pitfalls
+**ONLY create new methods when you need complex QueryBuilder operations that cannot be achieved with filter strategies.**
 
-1. **Avoid Creating New Methods**
-   - Don't create new methods unless absolutely necessary
-   - Use existing base repository methods with appropriate filters
+### Acceptable New Methods
 
-2. **Performance Considerations**
-   - Be mindful of relation loading
-   - Use appropriate indexes for filtered fields
-   - Consider pagination for large result sets
+1. **Complex Joins with QueryBuilder**
+```typescript
+async getUsersWithComplexJoin(filters: ComplexFilters): Promise<UserEntity[]> {
+  return this.repository
+    .createQueryBuilder('user')
+    .leftJoin('user.orders', 'order')
+    .leftJoin('order.products', 'product')
+    .where('product.category = :category', { category: filters.category })
+    .groupBy('user.id')
+    .having('COUNT(order.id) > :minOrders', { minOrders: filters.minOrders })
+    .getMany();
+}
+```
 
-3. **Type Safety**
-   - Always specify correct generic types
-   - Use readonly arrays for filter keys
+2. **Raw SQL for Performance**
+```typescript
+async getUserStatistics(): Promise<UserStats[]> {
+  return this.repository.query(`
+    SELECT 
+      u.id,
+      COUNT(o.id) as order_count,
+      SUM(o.total) as total_spent
+    FROM users u
+    LEFT JOIN orders o ON u.id = o.user_id
+    GROUP BY u.id
+  `);
+}
+```
 
-   - Validate filter values before applying strategies
+## What NOT to Do in Repositories
+
+❌ **Don't add business logic**
+```typescript
+// BAD - Business logic in repository
+async getActiveUsersWithRecentOrders(): Promise<UserEntity[]> {
+  const users = await this.getManyByQuery({ status: 'active' });
+  return users.filter(user => user.lastOrderDate > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+}
+```
+
+❌ **Don't create methods that just call base methods**
+```typescript
+// BAD - Unnecessary wrapper method
+async findUserByEmail(email: string): Promise<UserEntity> {
+  return this.getOneByQuery({ email });
+}
+```
+
+❌ **Don't add validation or transformation logic**
+```typescript
+// BAD - Validation belongs in DTOs/Services
+async createUser(userData: any): Promise<UserEntity> {
+  if (!userData.email || !userData.name) {
+    throw new Error('Email and name are required');
+  }
+  return this.addOne(userData);
+}
+```
+
+## Best Practices
+
+1. **Use Base Repository Methods in Services**
+   - Services should call `repository.getOneByQuery(filters)` instead of custom repository methods
+   - Services should call `repository.updateManyByQuery(filters, data)` for bulk updates
+   - Only create custom repository methods for complex QueryBuilder operations
+
+2. **Focus on Filter Strategies**
+   - Define comprehensive filter strategies for all queryable fields
+   - Use TypeORM operators (Like, ILike, Between, In, MoreThan, LessThan) appropriately
+   - Keep filter transformations simple and focused
+
+3. **Minimal Relations**
+   - Only load relations that are frequently needed
+   - Services can specify additional relations when needed using repository options
+
+4. **Type Safety**
+   - Always specify correct generic types for entity and filter keys
+   - Use readonly arrays for filter keys to prevent modification
+
+## Service Integration Examples
+
+Services should use repository methods directly with filters:
+
+```typescript
+// In Service - Good approach
+async findActiveUsersByName(name: string): Promise<UserResponseDto[]> {
+  const users = await this.userRepository.getManyByQuery({
+    name,
+    status: ['active']
+  });
+  return users.map(user => plainToInstance(UserResponseDto, user));
+}
+
+// In Service - Update users by criteria
+async deactivateInactiveUsers(): Promise<number> {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const result = await this.userRepository.updateManyByQuery(
+    { lastLoginDate: { end: thirtyDaysAgo } },
+    { status: 'inactive' }
+  );
+  return result.affected;
+}
+```
+
+## Summary
+
+- **Repositories**: Handle data access, filters, and complex queries only
+- **Services**: Handle business logic, validation, and orchestration
+- **Avoid**: Creating unnecessary methods in repositories
+- **Focus**: On comprehensive filter strategies and efficient data access patterns

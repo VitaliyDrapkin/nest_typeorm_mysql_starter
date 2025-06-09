@@ -1,0 +1,378 @@
+---
+description: Guidelines for creating and using TypeORM entities in NestJS modules
+globs: 
+alwaysApply: false
+---
+---
+description: Guidelines for creating and using TypeORM entities in NestJS modules
+globs: src/**/entities/**/*.entity.ts
+---
+# Entity Guidelines
+
+## Directory Structure
+
+Entities should be organized in the following structure within each module:
+
+```
+module/
+└── entities/
+    ├── entity-name.entity.ts
+    └── another-entity.entity.ts
+```
+
+## Entity Naming Conventions
+
+1. File naming: `[entity-name].entity.ts` (e.g., `user.entity.ts`, `product.entity.ts`)
+2. Class naming: `[EntityName]Entity` (e.g., `UserEntity`, `ProductEntity`)
+3. Table naming: Use singular form in lowercase (e.g., `users`, `products`)
+
+## Required Standard Fields
+
+Every entity **must** include these exact standard fields without exception:
+
+```typescript
+@PrimaryGeneratedColumn()
+id: number;
+
+@CreateDateColumn({ name: 'created_at' })
+createdAt: Date;
+
+@UpdateDateColumn({ name: 'updated_at' })
+updatedAt: Date;
+
+@DeleteDateColumn({ name: 'deleted_at' })
+deletedAt: Date | null;
+```
+
+### Critical Requirements:
+- **Always use `id: number`** - Never change to UUID, string, or any other type
+- **Always use `@PrimaryGeneratedColumn()`** - This generates auto-incrementing integer IDs
+- **Always include all four standard fields** - id, createdAt, updatedAt, deletedAt
+- **Use exact field names and types** - Do not modify the naming or types shown above
+
+## Best Practices
+
+1. Always use `@Entity('table_name')` decorator with explicit table name
+2. Use snake_case for database column names with `name` property
+3. Include proper TypeORM decorators for validation
+4. Use soft deletes with `@DeleteDateColumn`
+5. Follow consistent field ordering: id, business fields, audit fields
+
+## Complete Entity Example
+
+```typescript
+// entities/user.entity.ts
+import {
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+
+@Entity('users')
+export class UserEntity {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ name: 'email', nullable: false })
+  email: string;
+
+  @Column({ name: 'name', nullable: false })
+  name: string;
+
+  @Column({ name: 'password', nullable: false })
+  password: string;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt: Date | null;
+}
+```
+
+## Entity with Relationships Example
+
+```typescript
+// entities/post.entity.ts
+import {
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { UserEntity } from './user.entity';
+
+@Entity('posts')
+export class PostEntity {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ name: 'title', nullable: false })
+  title: string;
+
+  @Column({ name: 'content', type: 'text', nullable: false })
+  content: string;
+
+  @Column({ name: 'user_id', nullable: false })
+  userId: number;
+
+  @ManyToOne(() => UserEntity)
+  @JoinColumn({ name: 'user_id' })
+  user: UserEntity;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt: Date | null;
+}
+```
+
+## Many-to-Many Relationships
+
+If your data model includes a Many-to-Many relationship, always create a separate entity (join table entity) to represent this relationship. This approach ensures flexibility, improves readability, and allows you to add additional fields to the join table if needed.
+
+### Example: User-Role Many-to-Many Relationship
+
+Instead of using TypeORM's automatic join table, create an explicit join entity:
+
+```typescript
+// entities/user-role.entity.ts
+import {
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { UserEntity } from './user.entity';
+import { RoleEntity } from './role.entity';
+
+@Entity('user_roles')
+export class UserRoleEntity {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ name: 'user_id', nullable: false })
+  userId: number;
+
+  @Column({ name: 'role_id', nullable: false })
+  roleId: number;
+
+  // Additional fields can be added to the join table
+  @Column({ name: 'assigned_by', nullable: true })
+  assignedBy: number | null;
+
+  @Column({ name: 'assigned_at', type: 'timestamp', nullable: false })
+  assignedAt: Date;
+
+  // Relationships
+  @ManyToOne(() => UserEntity)
+  @JoinColumn({ name: 'user_id' })
+  user: UserEntity;
+
+  @ManyToOne(() => RoleEntity)
+  @JoinColumn({ name: 'role_id' })
+  role: RoleEntity;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt: Date | null;
+}
+```
+
+### Updated Entity with Many-to-Many Reference
+
+```typescript
+// entities/user.entity.ts
+import {
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { UserRoleEntity } from './user-role.entity';
+
+@Entity('users')
+export class UserEntity {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ name: 'email', nullable: false })
+  email: string;
+
+  @Column({ name: 'name', nullable: false })
+  name: string;
+
+  @Column({ name: 'password', nullable: false })
+  password: string;
+
+  // Reference to join table
+  @OneToMany(() => UserRoleEntity, userRole => userRole.user)
+  userRoles: UserRoleEntity[];
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt: Date | null;
+}
+```
+
+### Benefits of Explicit Join Entities
+
+1. **Flexibility**: Add additional fields to the relationship (e.g., timestamps, metadata)
+2. **Clarity**: Explicit control over the join table structure
+3. **Maintainability**: Easier to modify and extend the relationship
+4. **Consistency**: Follows the same patterns as other entities in the project
+5. **Audit Trail**: Standard audit fields are available on the relationship itself
+
+## Column Configuration Guidelines
+
+### String Fields
+```typescript
+@Column({ name: 'field_name', nullable: false })
+fieldName: string;
+
+// For longer text
+@Column({ name: 'description', type: 'text', nullable: true })
+description: string | null;
+```
+
+### Numeric Fields
+```typescript
+@Column({ name: 'price', type: 'decimal', precision: 10, scale: 2, nullable: false })
+price: number;
+
+@Column({ name: 'quantity', type: 'int', nullable: false, default: 0 })
+quantity: number;
+```
+
+### Boolean Fields
+```typescript
+@Column({ name: 'is_active', type: 'boolean', nullable: false, default: true })
+isActive: boolean;
+```
+
+### Date Fields (beyond audit fields)
+```typescript
+@Column({ name: 'published_at', type: 'timestamp', nullable: true })
+publishedAt: Date | null;
+```
+
+## Entity Registration
+
+Entities must be registered in the module's TypeORM configuration:
+
+```typescript
+// module.ts
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { UserEntity } from './entities/user.entity';
+
+@Module({
+  imports: [TypeOrmModule.forFeature([UserEntity])],
+  // ... other module configuration
+})
+export class UserModule {}
+```
+
+## Important Notes
+
+1. **Never skip the standard audit fields** (id, createdAt, updatedAt, deletedAt)
+2. **Always use `id: number` with `@PrimaryGeneratedColumn()`** - Never use UUID, string, or other types
+3. **Standard fields are non-negotiable** - Use the exact structure shown in examples
+4. Always use explicit column names with snake_case convention
+5. Use `nullable: false` explicitly for required fields
+6. Use soft deletes (`@DeleteDateColumn`) instead of hard deletes
+7. Keep entities focused on data structure only - no business logic
+8. Use consistent field ordering throughout the project
+9. Document complex relationships with JSDoc comments
+
+## Anti-Patterns to Avoid
+
+❌ **Don't do this:**
+```typescript
+// Missing standard fields
+@Entity()
+export class BadEntity {
+  @Column()
+  name: string; // No explicit column name or nullable specification
+}
+
+// Using UUID or other ID types
+@Entity('bad_entities')
+export class BadEntityWithUUID {
+  @PrimaryGeneratedColumn('uuid')
+  id: string; // ❌ Never use UUID or string IDs
+
+  @Column({ name: 'name', nullable: false })
+  name: string;
+}
+
+// Missing audit fields
+@Entity('incomplete_entities')
+export class IncompleteEntity {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ name: 'name', nullable: false })
+  name: string;
+  // ❌ Missing createdAt, updatedAt, deletedAt
+}
+```
+
+✅ **Do this instead:**
+```typescript
+@Entity('good_entities')
+export class GoodEntity {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ name: 'name', nullable: false })
+  name: string;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt: Date | null;
+}
+```
+
+
+
+
+
+
+
