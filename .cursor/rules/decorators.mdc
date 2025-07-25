@@ -1,37 +1,66 @@
 ---
-description: Guidelines for using common decorators in NestJS controllers
-globs: 
-alwaysApply: false
+globs: src/modules/**/controllers/*.ts
 ---
----
-description: Guidelines for using common decorators in NestJS controllers
-globs: src/**/*.controller.ts
----
+
 # Common Decorators Usage Guidelines
 
-This document outlines the usage of common decorators available in the project for controllers and routes.
+This document outlines the usage of all common decorators available in the project for controllers and routes.
 
 ## Available Decorators
 
 ### 1. @CurrentUser()
+
 Extracts the authenticated user from the JWT token. The user object is automatically injected by the `CurrentUserInterceptor`.
 
+**Import:**
+
 ```typescript
-// Example usage in a controller
+import { CurrentUser } from '@src/common/decorators/current-user.decorator';
+import { JwtUserDetailsDto } from '@src/common/dto/jwt-user-details.dto';
+```
+
+**Usage:**
+
+```typescript
 @Controller('users')
 export class UsersController {
   @Get('profile')
-  getProfile(@CurrentUser() user: User) {
-    return user;
+  getProfile(@CurrentUser() user: JwtUserDetailsDto) {
+    return this.service.findOne(user.id);
+  }
+
+  @Post()
+  create(
+    @Body() createUserDto: CreateUserRequestDto,
+    @CurrentUser() user: JwtUserDetailsDto,
+  ) {
+    return this.service.create(createUserDto, user.id);
   }
 }
 ```
 
-### 2. @CustomTimeout()
-Sets a custom timeout for a specific route. Useful for long-running operations.
+**JwtUserDetailsDto Properties:**
 
 ```typescript
-// Example usage in a controller
+export class JwtUserDetailsDto {
+  id: number; // User's unique identifier
+  email: string; // User's email address
+}
+```
+
+### 2. @CustomTimeout()
+
+Sets a custom timeout for a specific route. Useful for long-running operations.
+
+**Import:**
+
+```typescript
+import { CustomTimeout } from '@src/common/decorators/custom-timeout.decorator';
+```
+
+**Usage:**
+
+```typescript
 @Controller('reports')
 export class ReportsController {
   @Get('generate')
@@ -39,14 +68,28 @@ export class ReportsController {
   async generateReport() {
     // Long-running report generation
   }
+
+  @Post('upload')
+  @CustomTimeout(60000) // 60 seconds timeout
+  async uploadLargeFile() {
+    // Large file upload operation
+  }
 }
 ```
 
 ### 3. @Public()
+
 Marks a route as publicly accessible, bypassing JWT authentication.
 
+**Import:**
+
 ```typescript
-// Example usage in a controller
+import { Public } from '@src/common/decorators/public.decorator';
+```
+
+**Usage:**
+
+```typescript
 @Controller('auth')
 export class AuthController {
   @Post('login')
@@ -54,14 +97,35 @@ export class AuthController {
   async login(@Body() loginDto: LoginDto) {
     // Public login endpoint
   }
+
+  @Post('register')
+  @Public()
+  async register(@Body() registerDto: RegisterDto) {
+    // Public registration endpoint
+  }
+
+  @Get('health')
+  @Public()
+  async healthCheck() {
+    // Public health check endpoint
+  }
 }
 ```
 
 ### 4. @Roles()
+
 Restricts access to routes based on user roles. Must be used with the `RolesGuard`.
 
+**Import:**
+
 ```typescript
-// Example usage in a controller
+import { Roles } from '@src/common/decorators/roles.decorator';
+import { RoleEnum } from '@src/common/enums/role.enum';
+```
+
+**Usage:**
+
+```typescript
 @Controller('admin')
 export class AdminController {
   @Get('dashboard')
@@ -75,19 +139,27 @@ export class AdminController {
   async getReports() {
     // Accessible by both admins and managers
   }
+
+  @Post('settings')
+  @Roles(RoleEnum.ADMIN)
+  async updateSettings(@Body() settingsDto: SettingsDto) {
+    // Only admins can update settings
+  }
 }
 ```
 
 ## Best Practices
 
-1. Always use `@Public()` for authentication-related endpoints (login, register, etc.)
-2. Use `@Roles()` in combination with `@UseGuards(RolesGuard)` for role-based access control
-3. Apply `@CustomTimeout()` only when necessary for long-running operations
-4. Use `@CurrentUser()` to access the authenticated user's data in protected routes
+1. **@CurrentUser()**: Always type the parameter as `JwtUserDetailsDto` for type safety
+2. **@Public()**: Use for authentication-related endpoints (login, register, health checks)
+3. **@Roles()**: Use in combination with `@UseGuards(RolesGuard)` for role-based access control
+4. **@CustomTimeout()**: Apply only when necessary for long-running operations
+5. **Combining Decorators**: Order matters - place authentication decorators first
 
 ## Common Patterns
 
-### Combining Decorators
+### Combining Multiple Decorators
+
 ```typescript
 @Controller('admin')
 export class AdminController {
@@ -96,14 +168,15 @@ export class AdminController {
   @CustomTimeout(5000)
   async getUserDetails(
     @Param('id') id: string,
-    @CurrentUser() admin: User
+    @CurrentUser() admin: JwtUserDetailsDto,
   ) {
-    // Protected route with custom timeout
+    // Protected route with custom timeout and role check
   }
 }
 ```
 
 ### Public Routes with Custom Timeout
+
 ```typescript
 @Controller('public')
 export class PublicController {
@@ -115,15 +188,70 @@ export class PublicController {
   }
 }
 ```
+
+### User-Specific Data Access
+
+```typescript
+@Controller('users')
+export class UsersController {
+  @Get('my-posts')
+  async getMyPosts(
+    @CurrentUser() user: JwtUserDetailsDto,
+    @Query() query: GetPostsQueryDto,
+  ) {
+    return this.postService.findByUserId(user.id, query);
+  }
+}
 ```
 
-This cursor rule provides comprehensive documentation for the common decorators, including:
-1. Detailed explanations of each decorator's purpose
-2. Code examples showing how to use them in controllers
-3. Best practices for decorator usage
-4. Common patterns for combining multiple decorators
+### Resource Creation with Owner
 
-The rule will be automatically applied when working with controller files (matching the glob pattern `src/**/*.controller.ts`), helping developers understand and properly use the decorators in their code.
+```typescript
+@Controller('resources')
+export class ResourcesController {
+  @Post()
+  async create(
+    @Body() createResourceDto: CreateResourceRequestDto,
+    @CurrentUser() user: JwtUserDetailsDto,
+  ) {
+    return this.resourceService.create(createResourceDto, user.id);
+  }
+}
+```
 
+## Security Considerations
+
+### Authentication Flow
+
+```typescript
+@Controller('auth')
+export class AuthController {
+  @Post('login')
+  @Public()
+  async login(@Body() loginDto: LoginDto) {
+    // Public endpoint - no authentication required
+  }
+
+  @Get('profile')
+  async getProfile(@CurrentUser() user: JwtUserDetailsDto) {
+    // Protected endpoint - requires authentication
+    return this.service.findOne(user.id);
+  }
+}
+```
+
+### Role-Based Authorization
+
+```typescript
+@Controller('admin')
+@UseGuards(RolesGuard) // Apply guard at controller level
+export class AdminController {
+  @Get('dashboard')
+  @Roles(RoleEnum.ADMIN)
+  async getDashboard(@CurrentUser() user: JwtUserDetailsDto) {
+    // Only admins can access
+  }
+}
+```
 
 Would you like me to make any adjustments to the rule or add more specific examples?

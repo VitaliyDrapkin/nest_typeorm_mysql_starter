@@ -1,12 +1,7 @@
 ---
-description: Guidelines for creating and using DTOs in NestJS modules
-globs: 
-alwaysApply: false
+globs: src/modules/**/dto/**/*.ts
 ---
----
-description: Guidelines for creating and using DTOs in NestJS modules
-globs: src/**/dto/**/*.ts
----
+
 # DTO Guidelines
 
 ## Directory Structure
@@ -18,7 +13,6 @@ module/
 ├── queries/ # GET request parameters and filters
 ├── requests/ # POST/PUT/PATCH request bodies
 └── responses/ # Response DTOs
-
 
 ## DTO Naming Conventions
 
@@ -35,19 +29,24 @@ module/
 
 ## Examples
 
-### 1. Query DTO with Pagination
+### 1. Query DTO
 
 ```typescript
-// queries/user-query.dto.ts
+// queries/get-users.query.dto.ts
+import { PaginationQueryDto } from '@src/shared/dtos/pagination.query.dto';
 import { IsOptional, IsString, IsEnum } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { PaginationDto } from '@shared/dtos/pagination.dto';
 
-export class UserQueryDto extends PaginationDto {
+export class GetUsersQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   @Transform(({ value }) => value?.trim())
-  search?: string;
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => value?.trim())
+  name?: string;
 
   @IsOptional()
   @IsEnum(UserRole)
@@ -58,11 +57,11 @@ export class UserQueryDto extends PaginationDto {
 ### 2. Request DTO
 
 ```typescript
-// requests/create-user.dto.ts
+// requests/create-user.request.dto.ts
 import { IsEmail, IsString, MinLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 
-export class CreateUserDto {
+export class CreateUserRequestDto {
   @IsString()
   @MinLength(2)
   @Transform(({ value }) => value?.trim())
@@ -86,7 +85,7 @@ export class CreateUserDto {
 ### 3. Response DTO
 
 ```typescript
-// responses/user-response.dto.ts
+// responses/user.response.dto.ts
 import { Exclude, Expose, Transform } from 'class-transformer';
 
 @Exclude()
@@ -112,6 +111,9 @@ export class UserResponseDto {
 
   @Expose()
   createdAt: Date;
+
+  @Expose()
+  updateAt: Date;
 }
 ```
 
@@ -130,6 +132,7 @@ export class UpdateUserRequestDto extends PartialType(
 ```
 
 **Benefits of this approach:**
+
 - **DRY Principle**: Avoids duplicating validation rules and field definitions
 - **Consistency**: Ensures update operations use the same validation as create operations
 - **Maintainability**: Changes to create DTO automatically apply to update DTO
@@ -137,6 +140,7 @@ export class UpdateUserRequestDto extends PartialType(
 - **Optional Fields**: `PartialType` makes all fields optional for partial updates
 
 **Common patterns:**
+
 ```typescript
 // For full updates (all fields optional)
 export class UpdateUserDto extends PartialType(CreateUserDto) {}
@@ -159,20 +163,26 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
 ```typescript
 // user.controller.ts
 import { Controller, Get, Post, Body, Query } from '@nestjs/common';
-import { UserQueryDto } from './dto/queries/user-query.dto';
-import { CreateUserDto } from './dto/requests/create-user.dto';
-import { UserResponseDto } from './dto/responses/user-response.dto';
+import { plainToInstance } from 'class-transformer';
+import { GetUsersQueryDto } from './dto/queries/get-users.query.dto';
+import { CreateUserRequestDto } from './dto/requests/create-user.request.dto';
+import { GetUsersResponseDto } from './dto/responses/get-users.response.dto';
+import { UserResponseDto } from './dto/responses/user.response.dto';
 
 @Controller('users')
 export class UserController {
   @Get()
-  async findAll(@Query() query: UserQueryDto): Promise<UserResponseDto[]> {
-    const users = await this.userService.findAll(query);
-    return plainToInstance(UserResponseDto, users);
+  async findAll(
+    @Query() query: GetUsersQueryDto,
+  ): Promise<GetUsersResponseDto> {
+    const result = await this.userService.getMany(query);
+    return result; // Already transformed by PaginationTransformer
   }
 
   @Post()
-  async create(@Body() createUserDto: CreateUserDto): Promise<UserResponseDto> {
+  async create(
+    @Body() createUserDto: CreateUserRequestDto,
+  ): Promise<UserResponseDto> {
     const user = await this.userService.create(createUserDto);
     return plainToInstance(UserResponseDto, user);
   }
@@ -186,5 +196,57 @@ export class UserController {
 3. Implement proper validation using `class-validator`
 4. Keep DTOs focused and single-purpose
 5. Use inheritance to avoid code duplication
-
 6. Always document complex DTOs with JSDoc comments
+
+## Pagination Integration
+
+For comprehensive pagination implementation guidelines, including service patterns, repository usage, and best practices, refer to: [@pagination.mdc](pagination.mdc)
+
+### Pagination DTOs
+
+**MANDATORY: All paginated query DTOs MUST extend `PaginationQueryDto` to inherit pagination parameters.**
+
+**MANDATORY: All paginated response DTOs MUST extend `PaginationResponseDto<T>` where T is the item type.**
+
+### Paginated Response DTO Example
+
+```typescript
+// responses/get-users.response.dto.ts
+import { PaginationResponseDto } from '@src/shared/dtos/pagination.response.dto';
+import { UserResponseDto } from './user.response.dto';
+
+export class GetUsersResponseDto extends PaginationResponseDto<UserResponseDto> {
+  data: UserResponseDto[];
+}
+```
+
+### What Pagination DTOs Provide
+
+**PaginationQueryDto:**
+
+- `skip?: number` - Number of items to skip (default: 0)
+- `take?: number` - Number of items to take (default: 100)
+- Automatic validation and transformation
+- Swagger documentation
+
+**PaginationResponseDto:**
+
+- `totalItems: number` - Total number of items
+- `totalPages: number` - Total number of pages
+- `currentPage: number` - Current page number
+- `itemsPerPage: number` - Items per page
+- `hasNextPage: boolean` - Whether there's a next page
+- `hasPreviousPage: boolean` - Whether there's a previous page
+- `data: T[]` - Array of items
+
+### Key Points for Pagination DTOs
+
+1. **Query DTOs**: ALWAYS extend `PaginationQueryDto`
+2. **Response DTOs**: ALWAYS extend `PaginationResponseDto<T>`
+3. **Naming**: Use descriptive names like `GetUsersQueryDto` and `GetUsersResponseDto`
+4. **Validation**: Add specific filter properties as optional fields with appropriate validation
+5. **Transformation**: Use `Transform` decorator for data cleaning (trim, lowercase, etc.)
+6. For pagination, always use the shared pagination infrastructure from `@pagination.mdc`
+
+7. Always document complex DTOs with JSDoc comments
+8. For pagination, always use the shared pagination infrastructure from `@pagination.mdc`

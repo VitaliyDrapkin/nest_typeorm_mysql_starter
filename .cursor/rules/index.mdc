@@ -1,8 +1,9 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: true
 ---
+
 # NestJS Project - Master Rule Index
 
 This document serves as the central index for all active Cursor rules within this NestJS repository. These rules define processes, structures, and guidelines for development.
@@ -11,31 +12,32 @@ This document serves as the central index for all active Cursor rules within thi
 
 Fundamental project structure, setup, and general development guidelines.
 
-| Rule File                          | Description                                                 |
-| :--------------------------------- | :---------------------------------------------------------- |
-| @cursor-rules.mdc                  | How to add or edit Cursor rules in our project              |
-| @project-structure.mdc             | Project structure and file organization guidelines          |
-| @decorators.mdc                    | Custom decorator usage and implementation guidelines        |
+| Rule File              | Description                                          |
+| :--------------------- | :--------------------------------------------------- |
+| @cursor-rules.mdc      | How to add or edit Cursor rules in our project       |
+| @project-structure.mdc | Project structure and file organization guidelines   |
+| @decorators.mdc        | Custom decorator usage and implementation guidelines |
+| @current-user.mdc      | Guidelines for using the @CurrentUser decorator      |
 
 ## Application Components
 
 Rules for implementing core NestJS components and features.
 
-| Rule File                          | Description                                                 |
-| :--------------------------------- | :---------------------------------------------------------- |
-| @entity-rule.mdc                   | TypeORM entity implementation and database model guidelines |
-| @service-rule.mdc                  | Service layer implementation and business logic guidelines  |
-| @controller-rule.mdc               | Controller implementation and API endpoint guidelines       |
-| @repository-rule.mdc               | Repository pattern implementation and database access rules |
-| @dto-rule.mdc                      | Data Transfer Object (DTO) implementation guidelines        |
+| Rule File       | Description                                                 |
+| :-------------- | :---------------------------------------------------------- |
+| @entity.mdc     | TypeORM entity implementation and database model guidelines |
+| @service.mdc    | Service layer implementation and business logic guidelines  |
+| @controller.mdc | Controller implementation and API endpoint guidelines       |
+| @repository.mdc | Repository pattern implementation and database access rules |
+| @dto.mdc        | Data Transfer Object (DTO) implementation guidelines        |
 
 ## Infrastructure & Utilities
 
 Rules for implementing infrastructure components and utilities.
 
-| Rule File                          | Description                                                 |
-| :--------------------------------- | :---------------------------------------------------------- |
-| @logger-rule.mdc                   | Logging implementation and best practices                   |
+| Rule File   | Description                               |
+| :---------- | :---------------------------------------- |
+| @logger.mdc | Logging implementation and best practices |
 
 ## Usage Guidelines
 
@@ -47,22 +49,32 @@ Rules for implementing infrastructure components and utilities.
 ## Rule Categories
 
 ### Core Architecture
+
 - Project structure and organization
 - Module organization and dependencies
 - File naming conventions
 - Directory structure
 
 ### Components
+
 - Controller implementation
 - Service layer patterns
 - Repository pattern usage
 - DTO structure and validation
 
 ### Infrastructure
+
 - Logging configuration
 - Error handling
 - Custom decorators
 - Database access patterns
+
+### Testing & Quality Assurance
+
+- Jest testing standards
+- Test-driven development workflow
+- Mocking patterns and best practices
+- Test coverage requirements
 
 ## Best Practices
 

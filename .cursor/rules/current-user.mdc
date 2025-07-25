@@ -1,0 +1,195 @@
+---
+globs: src/modules/**/controllers/*.ts
+---
+
+# @CurrentUser Decorator Usage Guidelines
+
+This document outlines the best practices for using the `@CurrentUser` decorator to extract user information from JWT tokens in our NestJS application.
+
+## Overview
+
+The `@CurrentUser` decorator is the **ONLY** approved way to extract user information from JWT tokens in controllers and services. It provides type-safe access to the authenticated user's details.
+
+### Import Statement
+
+Always import the decorator from the correct path:
+
+```typescript
+import { CurrentUser } from '@src/common/decorators/current-user.decorator';
+import { JwtUserDetailsDto } from '@src/common/dto/jwt-user-details.dto';
+```
+
+### Basic Usage
+
+```typescript
+@Get('profile')
+async getProfile(
+  @CurrentUser() user: JwtUserDetailsDto,
+): Promise<UserResponseDto> {
+  return this.service.findOne(user.id);
+}
+```
+
+## Type Safety
+
+### Always Use JwtUserDetailsDto
+
+- **REQUIRED**: Always type the parameter as `JwtUserDetailsDto`
+- **NEVER**: Use `any`, `unknown`, or custom types for the user parameter
+- **NEVER**: Create custom solutions for extracting user information
+
+```typescript
+// ✅ CORRECT
+@CurrentUser() user: JwtUserDetailsDto
+
+// ❌ INCORRECT
+@CurrentUser() user: any
+@CurrentUser() user: unknown
+@CurrentUser() user: UserEntity
+```
+
+## Available User Properties
+
+The `JwtUserDetailsDto` contains the following properties:
+
+```typescript
+export class JwtUserDetailsDto {
+  id: number; // User's unique identifier
+}
+```
+
+### Usage Examples
+
+```typescript
+// Access user ID
+const userId = user.id;
+
+// Pass user ID to service methods
+return this.service.createUser(createUserDto, user.id);
+
+// Use in business logic
+if (user.id === targetUserId) {
+  // User is accessing their own data
+}
+```
+
+## Controller Implementation
+
+### Required Pattern
+
+Always use `@CurrentUser()` in controllers when you need user context:
+
+```typescript
+@ApiTags('users')
+@Controller('users')
+export class UsersController {
+  constructor(private readonly service: UsersService) {}
+
+  @Get('profile')
+  async getProfile(
+    @CurrentUser() user: JwtUserDetailsDto,
+  ): Promise<UserResponseDto> {
+    return this.service.findOne(user.id);
+  }
+}
+```
+
+## Service Implementation
+
+### Passing User Context
+
+When calling service methods from controllers, always pass the user ID:
+
+```typescript
+// In controller
+@Post()
+async create(
+  @Body() createUserDto: CreateUserRequestDto,
+  @CurrentUser() user: JwtUserDetailsDto,
+): Promise<UserResponseDto> {
+  return this.service.create(createUserDto, user.id);
+}
+
+// In service
+async create(
+  createUserDto: CreateUserRequestDto,
+  createdByUserId: number,
+): Promise<UserResponseDto> {
+  // Use createdByUserId for audit trails, ownership, etc.
+  const user = this.userRepository.create({
+    ...createUserDto,
+    createdBy: createdByUserId,
+  });
+  return this.userRepository.save(user);
+}
+```
+
+## Security Best Practices
+
+### Authentication Required
+
+- The `@CurrentUser()` decorator works on all routes by default
+- **All routes are protected** in this project unless explicitly marked with `@Public()`
+- Only routes with `@Public()` decorator don't require JWT authentication
+- The decorator will automatically extract user information from JWT tokens
+
+## Error Handling
+
+### Missing User Context
+
+If the `@CurrentUser()` decorator is used on a route marked with `@Public()`, it will return `undefined`. For protected routes, user context is always available:
+
+```typescript
+// Protected route (default behavior) - user context always available
+@Get('profile')
+async getProfile(
+  @CurrentUser() user: JwtUserDetailsDto,
+): Promise<UserResponseDto> {
+  // user will always be defined here
+  return this.service.findOne(user.id);
+}
+
+// Public route - user context not available
+@Get('health')
+@Public()
+async healthCheck(
+  @CurrentUser() user: JwtUserDetailsDto,
+): Promise<any> {
+  // user will be undefined here since route is public
+  return { status: 'ok' };
+}
+```
+
+## Migration from Custom Solutions
+
+### Before (Incorrect)
+
+```typescript
+// ❌ DON'T DO THIS
+@Get('profile')
+async getProfile(@Req() request: Request): Promise<UserResponseDto> {
+  const userId = request.user?.id; // Custom extraction
+  return this.service.findOne(userId);
+}
+```
+
+### After (Correct)
+
+```typescript
+// ✅ DO THIS
+@Get('profile')
+async getProfile(
+  @CurrentUser() user: JwtUserDetailsDto,
+): Promise<UserResponseDto> {
+  return this.service.findOne(user.id);
+}
+```
+
+## Summary
+
+1. **Always** use `@CurrentUser()` decorator for user context
+2. **Always** type the parameter as `JwtUserDetailsDto`
+3. **Never** create custom solutions for extracting user information
+4. **Always** pass user ID to service methods when needed
+5. **Always** ensure routes are protected by `JwtAuthGuard`
+6. **Use** the decorator for authorization and audit trails

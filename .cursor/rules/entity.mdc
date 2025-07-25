@@ -1,12 +1,7 @@
 ---
-description: Guidelines for creating and using TypeORM entities in NestJS modules
-globs: 
-alwaysApply: false
+globs: src/modules/**/entities/*.ts
 ---
----
-description: Guidelines for creating and using TypeORM entities in NestJS modules
-globs: src/**/entities/**/*.entity.ts
----
+
 # Entity Guidelines
 
 ## Directory Structure
@@ -45,6 +40,7 @@ deletedAt: Date | null;
 ```
 
 ### Critical Requirements:
+
 - **Always use `id: number`** - Never change to UUID, string, or any other type
 - **Always use `@PrimaryGeneratedColumn()`** - This generates auto-incrementing integer IDs
 - **Always include all four standard fields** - id, createdAt, updatedAt, deletedAt
@@ -232,7 +228,7 @@ export class UserEntity {
   password: string;
 
   // Reference to join table
-  @OneToMany(() => UserRoleEntity, userRole => userRole.user)
+  @OneToMany(() => UserRoleEntity, (userRole) => userRole.user)
   userRoles: UserRoleEntity[];
 
   @CreateDateColumn({ name: 'created_at' })
@@ -257,6 +253,7 @@ export class UserEntity {
 ## Column Configuration Guidelines
 
 ### String Fields
+
 ```typescript
 @Column({ name: 'field_name', nullable: false })
 fieldName: string;
@@ -267,6 +264,7 @@ description: string | null;
 ```
 
 ### Numeric Fields
+
 ```typescript
 @Column({ name: 'price', type: 'decimal', precision: 10, scale: 2, nullable: false })
 price: number;
@@ -276,12 +274,14 @@ quantity: number;
 ```
 
 ### Boolean Fields
+
 ```typescript
 @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true })
 isActive: boolean;
 ```
 
 ### Date Fields (beyond audit fields)
+
 ```typescript
 @Column({ name: 'published_at', type: 'timestamp', nullable: true })
 publishedAt: Date | null;
@@ -319,6 +319,7 @@ export class UserModule {}
 ## Anti-Patterns to Avoid
 
 ❌ **Don't do this:**
+
 ```typescript
 // Missing standard fields
 @Entity()
@@ -350,6 +351,7 @@ export class IncompleteEntity {
 ```
 
 ✅ **Do this instead:**
+
 ```typescript
 @Entity('good_entities')
 export class GoodEntity {
@@ -369,10 +371,3 @@ export class GoodEntity {
   deletedAt: Date | null;
 }
 ```
-
-
-
-
-
-
-

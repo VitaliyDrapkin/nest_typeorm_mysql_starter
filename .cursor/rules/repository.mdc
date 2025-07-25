@@ -1,12 +1,7 @@
 ---
-description: Guidelines for implementing and using repositories in the NestJS application
-globs: 
-alwaysApply: false
+globs: src/modules/**/repositories/*.ts
 ---
----
-description: Guidelines for implementing and using repositories in the NestJS application
-globs: src/**/repositories/*.ts
----
+
 # Repository Guidelines
 
 This document outlines best practices for implementing and using repositories in our NestJS application.
@@ -22,6 +17,7 @@ The `BaseRepository` class provides a complete foundation for all repositories. 
 ### Key Features
 
 1. **Type Safety**
+
    - Generic type parameters for entity and filter keys
    - Type-safe query building
    - Automatic relation handling
@@ -38,7 +34,10 @@ The `BaseRepository` class provides a complete foundation for all repositories. 
 
 ```typescript
 @Injectable()
-export class UserRepository extends BaseRepository<UserEntity, ['id', 'email', 'name', 'status', 'createdAt']> {
+export class UserRepository extends BaseRepository<
+  UserEntity,
+  ['id', 'email', 'name', 'status', 'createdAt']
+> {
   constructor(
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
@@ -79,41 +78,46 @@ Filter strategies are the PRIMARY responsibility of repositories. They define ho
 ### Common Filter Patterns
 
 1. **Exact Match**
+
 ```typescript
 id: (value: number) => ({
   id: value,
-})
+});
 ```
 
 2. **Case-Insensitive Search**
+
 ```typescript
 name: (value: string) => ({
   name: ILike(`%${value}%`),
-})
+});
 ```
 
 3. **Date Range Filtering**
+
 ```typescript
 dateRange: (value: { start: Date; end: Date }) => ({
   createdAt: Between(value.start, value.end),
-})
+});
 ```
 
 4. **Multiple Values (Array)**
+
 ```typescript
 status: (value: string[]) => ({
   status: In(value),
-})
+});
 ```
 
 5. **Complex Nested Filters**
+
 ```typescript
 userProfile: (value: { age: number; city: string }) => ({
   profile: {
     age: MoreThanOrEqual(value.age),
     city: ILike(`%${value.city}%`),
   },
-})
+});
 ```
 
 ## When to Create New Methods
@@ -123,6 +127,7 @@ userProfile: (value: { age: number; city: string }) => ({
 ### Acceptable New Methods
 
 1. **Complex Joins with QueryBuilder**
+
 ```typescript
 async getUsersWithComplexJoin(filters: ComplexFilters): Promise<UserEntity[]> {
   return this.repository
@@ -137,10 +142,11 @@ async getUsersWithComplexJoin(filters: ComplexFilters): Promise<UserEntity[]> {
 ```
 
 2. **Raw SQL for Performance**
+
 ```typescript
 async getUserStatistics(): Promise<UserStats[]> {
   return this.repository.query(`
-    SELECT 
+    SELECT
       u.id,
       COUNT(o.id) as order_count,
       SUM(o.total) as total_spent
@@ -154,6 +160,7 @@ async getUserStatistics(): Promise<UserStats[]> {
 ## What NOT to Do in Repositories
 
 ❌ **Don't add business logic**
+
 ```typescript
 // BAD - Business logic in repository
 async getActiveUsersWithRecentOrders(): Promise<UserEntity[]> {
@@ -163,6 +170,7 @@ async getActiveUsersWithRecentOrders(): Promise<UserEntity[]> {
 ```
 
 ❌ **Don't create methods that just call base methods**
+
 ```typescript
 // BAD - Unnecessary wrapper method
 async findUserByEmail(email: string): Promise<UserEntity> {
@@ -171,6 +179,7 @@ async findUserByEmail(email: string): Promise<UserEntity> {
 ```
 
 ❌ **Don't add validation or transformation logic**
+
 ```typescript
 // BAD - Validation belongs in DTOs/Services
 async createUser(userData: any): Promise<UserEntity> {
@@ -184,16 +193,19 @@ async createUser(userData: any): Promise<UserEntity> {
 ## Best Practices
 
 1. **Use Base Repository Methods in Services**
+
    - Services should call `repository.getOneByQuery(filters)` instead of custom repository methods
    - Services should call `repository.updateManyByQuery(filters, data)` for bulk updates
    - Only create custom repository methods for complex QueryBuilder operations
 
 2. **Focus on Filter Strategies**
+
    - Define comprehensive filter strategies for all queryable fields
    - Use TypeORM operators (Like, ILike, Between, In, MoreThan, LessThan) appropriately
    - Keep filter transformations simple and focused
 
 3. **Minimal Relations**
+
    - Only load relations that are frequently needed
    - Services can specify additional relations when needed using repository options
 

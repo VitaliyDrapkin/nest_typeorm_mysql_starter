@@ -1,12 +1,9 @@
 ---
 description: Project structure and organization guidelines for NestJS applications
-globs: 
+globs:
 alwaysApply: false
 ---
----
-description: Project structure and organization guidelines for NestJS applications
-alwaysApply: false
----
+
 # Project Structure Guidelines
 
 This document outlines the standard project structure and organization for our NestJS applications.
@@ -23,11 +20,12 @@ src/
 ├── config/ # Configuration management
 └── common/ # Common utilities and decorators
 
-
 ## Core Components
 
 ### 1. Core (`src/core/`)
+
 Global features and modules:
+
 - `exceptions/` — Global error handling
 - `guards/` — Authentication guards
 - `interceptors/` — Request/response interceptors
@@ -35,19 +33,25 @@ Global features and modules:
 - `core.module.ts` — Global module registration
 
 ### 2. Common (`src/common/`)
+
 Reusable utilities:
+
 - `decorators/` — Custom decorators
 - `dto/` — Shared DTOs
 - `enums/` — Common enums
 - `base-repository.ts` — Extended TypeORM repository
 
 ### 3. Database (`src/database/`)
+
 Database management:
+
 - `migration/` — Database migrations
 - `seeders/` — Database seeders
 
 ### 4. Shared (`src/shared/`)
+
 Shared utilities:
+
 - `api-manager/` — Internal API requests
 - `dtos/` — Shared DTOs
 - `transformers/` — Data transformers
@@ -69,10 +73,10 @@ Each feature module should follow this structure:
 ├── interfaces/ # Module-specific types
 └── module-name.module.ts # Module definition
 
-
 ## Module Guidelines
 
 1. **Imports**:
+
    - A module may import:
      - Its own services, controllers, repositories
      - Other modules entirely
@@ -80,6 +84,7 @@ Each feature module should follow this structure:
    - Only services should be exported
 
 2. **File Organization**:
+
    - Keep related files close together
    - Use clear, descriptive names
    - Follow the standard structure for consistency
@@ -93,16 +98,19 @@ Each feature module should follow this structure:
 ## Best Practices
 
 1. **Module Independence**:
+
    - Modules should be self-contained
    - Use dependency injection
    - Avoid circular dependencies
 
 2. **Code Organization**:
+
    - Keep files focused and single-purpose
    - Use clear naming conventions
    - Document complex logic
 
 3. **Type Safety**:
+
    - Use TypeScript interfaces and types
    - Define DTOs for all data structures
    - Use class-validator for validation
@@ -124,4 +132,3 @@ Each feature module should follow this structure:
 - Log levels: debug, info, warn, error
 - Configure logging in `.env`
 - File logging available in `logs/` directory
-

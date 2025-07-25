@@ -1,0 +1,212 @@
+---
+globs: src/modules/**/controllers/*.ts
+---
+
+# NestJS Controller and DTO Structure Guidelines
+
+This document outlines the best practices for structuring NestJS controllers in our project.
+
+## Controller Structure
+
+### File Location
+
+- Place controllers in `src/modules/{module-name}/controllers/`
+- Name files as `{feature}.controller.ts`
+
+### Controller Decorators
+
+- Always use `@Controller()` with a meaningful route prefix
+- Use `@ApiTags()` for Swagger documentation
+- Group related endpoints logically
+
+### Method Organization
+
+- Group CRUD operations together
+- Use appropriate HTTP method decorators (`@Get`, `@Post`, `@Put`,`@Patch`, `@Delete`)
+- Include proper parameter decorators (`@Body`, `@Param`, `@Query`)
+
+### Data Transfer Objects (DTOs)
+
+Data for request bodies, query parameters, and responses should be obtained using DTOs. DTOs provide type safety, validation, and clear contract definitions between client and server.
+
+- **Request Body**: Use `@Body()` with request DTOs for POST/PUT/PATCH operations
+- **Query Parameters**: Use `@Query()` with query DTOs for GET operations with filters
+- **Response Data**: Use response DTOs to define the structure of returned data
+
+For detailed DTO guidelines and examples, see [@dto-rule.mdc](./dto-rule.mdc).
+
+### Example Controller
+
+```typescript
+import { CurrentUser } from '@src/common/decorators/current-user.decorator';
+import { JwtUserDetailsDto } from '@src/common/dto/jwt-user-details.dto';
+
+@ApiTags('users')
+@Controller('users')
+export class UsersController {
+  constructor(private readonly service: UsersService) {}
+
+  @Get()
+  async findAll(
+    @Query() query: GetUsersQueryDto,
+  ): Promise<PaginationResponseDto<UserResponseDto>> {
+    return this.service.findAll(query);
+  }
+
+  @Get(':id')
+  async findOne(@Param('id') id: number): Promise<UserResponseDto> {
+    return this.service.findOne(id);
+  }
+
+  @Post()
+  async create(
+    @Body() createUserDto: CreateUserRequestDto,
+  ): Promise<UserResponseDto> {
+    return this.service.create(createUserDto);
+  }
+}
+```
+
+### Authentication and User Context
+
+- **ALWAYS** use `@CurrentUser()` decorator to extract user information from JWT tokens
+- **NEVER** create custom solutions for extracting userId from tokens
+- Import `@CurrentUser` from `@src/common/decorators/current-user.decorator`
+- The decorator returns `JwtUserDetailsDto` with user information
+
+The `@CurrentUser()` decorator automatically extracts the authenticated user's information from the JWT token and provides type-safe access to user details. This is essential for implementing user-specific functionality, authorization checks, and audit trails.
+
+For detailed usage guidelines and examples, see [@current-user.mdc](./current-user.mdc).
+
+### Additional Decorators
+
+#### @Public()
+
+Marks a route as publicly accessible, bypassing JWT authentication. Use for authentication endpoints, health checks, and public APIs.
+
+```typescript
+@Post('login')
+@Public()
+async login(@Body() loginDto: LoginDto) {
+  return this.authService.login(loginDto);
+}
+```
+
+#### @CustomTimeout()
+
+Sets a custom timeout for long-running operations. Useful for file uploads, report generation, or data processing tasks.
+
+```typescript
+@Post('upload')
+@CustomTimeout(60000) // 60 seconds
+async uploadFile(@Body() fileDto: UploadFileDto) {
+  return this.fileService.upload(fileDto);
+}
+```
+
+#### @Roles()
+
+Restricts access to routes based on user roles. Must be used with the `RolesGuard` for proper authorization.
+
+```typescript
+@Get('admin-dashboard')
+@Roles(RoleEnum.ADMIN)
+async getAdminDashboard(@CurrentUser() user: JwtUserDetailsDto) {
+  return this.adminService.getDashboard(user.id);
+}
+```
+
+For comprehensive decorator usage guidelines and examples, see [@decorators.mdc](./decorators.mdc).
+
+## Business Logic Prohibition
+
+**CRITICAL**: Controllers should NEVER contain business logic. All business logic must be implemented in services.
+
+### ❌ Bad Example - Business Logic in Controller
+
+```typescript
+@Controller('users')
+export class UsersController {
+  constructor(private readonly userRepository: UserRepository) {}
+
+  @Post()
+  async create(@Body() createUserDto: CreateUserRequestDto) {
+    // ❌ BUSINESS LOGIC IN CONTROLLER
+    const existingUser = await this.userRepository.findByEmail(
+      createUserDto.email,
+    );
+    if (existingUser) {
+      throw new ConflictException('User already exists');
+    }
+
+    // ❌ MORE BUSINESS LOGIC
+    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+    const user = this.userRepository.create({
+      ...createUserDto,
+      password: hashedPassword,
+    });
+
+    // ❌ VALIDATION LOGIC
+    if (createUserDto.age < 18) {
+      throw new BadRequestException('User must be 18 or older');
+    }
+
+    return this.userRepository.save(user);
+  }
+}
+```
+
+### ✅ Good Example - Controller Delegates to Service
+
+```typescript
+@Controller('users')
+export class UsersController {
+  constructor(private readonly userService: UserService) {}
+
+  @Post()
+  async create(
+    @Body() createUserDto: CreateUserRequestDto,
+    @CurrentUser() user: JwtUserDetailsDto,
+  ): Promise<UserResponseDto> {
+    // ✅ CONTROLLER ONLY HANDLES HTTP CONCERNS
+    return this.userService.create(createUserDto, user.id);
+  }
+
+  @Get(':id')
+  async findOne(@Param('id') id: number): Promise<UserResponseDto> {
+    // ✅ CONTROLLER ONLY HANDLES HTTP CONCERNS
+    return this.userService.findOne(id);
+  }
+
+  @Put(':id')
+  async update(
+    @Param('id') id: number,
+    @Body() updateUserDto: UpdateUserRequestDto,
+    @CurrentUser() user: JwtUserDetailsDto,
+  ): Promise<UserResponseDto> {
+    // ✅ CONTROLLER ONLY HANDLES HTTP CONCERNS
+    return this.userService.update(id, updateUserDto, user.id);
+  }
+}
+```
+
+### Controller Responsibilities
+
+Controllers should ONLY handle:
+
+- HTTP request/response concerns
+- Parameter extraction and validation
+- Delegating to services
+- Error handling at HTTP level
+- Response formatting
+
+### Service Responsibilities
+
+Services should handle:
+
+- All business logic
+- Data validation and transformation
+- Database operations
+- External API calls
+- Complex calculations
+- Business rules and constraints
