@@ -5,307 +5,102 @@ alwaysApply: false
 
 # NestJS Pagination Implementation Guidelines
 
-This document outlines the standard patterns and best practices for implementing pagination in our NestJS application using the shared pagination infrastructure.
-
 ## Core Principle
 
-**ALWAYS use the shared pagination infrastructure: `PaginationQueryDto` for requests, `PaginationResponseDto` for responses, and `PaginationTransformer` for data transformation. NEVER implement custom pagination logic.**
+Use shared pagination infrastructure: `PaginationQueryDto`, `PaginationResponseDto`, and `PaginationTransformer`. Never implement custom pagination logic.
 
 ## Required Components
 
-### 1. Query DTOs - Extend PaginationQueryDto
-
-**MANDATORY: All paginated query DTOs MUST extend `PaginationQueryDto` to inherit pagination parameters.**
+### 1. Query DTO - Extend PaginationQueryDto
 
 ```typescript
 import { PaginationQueryDto } from '@src/shared/dtos/pagination.query.dto';
-import { IsOptional, IsString } from 'class-validator';
 
 export class GetUsersQueryDto extends PaginationQueryDto {
   @IsString()
   @IsOptional()
   email?: string;
-
-  @IsString()
-  @IsOptional()
-  name?: string;
 }
 ```
 
-**What PaginationQueryDto Provides:**
+Provides: `skip` (default: 0), `take` (default: 100), validation, Swagger docs.
 
-- `skip?: number` - Number of items to skip (default: 0)
-- `take?: number` - Number of items to take (default: 100)
-- Automatic validation and transformation
-- Swagger documentation
-
-### 2. Response DTOs - Extend PaginationResponseDto
-
-**MANDATORY: All paginated response DTOs MUST extend `PaginationResponseDto<T>` where T is the item type.**
+### 2. Response DTO - Extend PaginationResponseDto
 
 ```typescript
 import { PaginationResponseDto } from '@src/shared/dtos/pagination.response.dto';
-import { UserResponseDto } from './user.response.dto';
 
 export class GetUsersResponseDto extends PaginationResponseDto<UserResponseDto> {
   data: UserResponseDto[];
 }
 ```
 
-**What PaginationResponseDto Provides:**
+Provides: `totalItems`, `totalPages`, `currentPage`, `itemsPerPage`, `hasNextPage`, `hasPreviousPage`, `data`.
 
-- `totalItems: number` - Total number of items
-- `totalPages: number` - Total number of pages
-- `currentPage: number` - Current page number
-- `itemsPerPage: number` - Items per page
-- `hasNextPage: boolean` - Whether there's a next page
-- `hasPreviousPage: boolean` - Whether there's a previous page
-- `data: T[]` - Array of items
-
-### 3. Service Implementation - Use PaginationTransformer
-
-**MANDATORY: All paginated service methods MUST use `PaginationTransformer.toPaginationResponseDto()` for consistent response formatting.**
-
-## Service Implementation Pattern
-
-### Basic Pagination Pattern
+### 3. Service - Use PaginationTransformer
 
 ```typescript
-import { Injectable } from '@nestjs/common';
-import { LogService } from '@src/core/logger/log-service';
-import { PaginationResponseDto } from '@src/shared/dtos/pagination.response.dto';
-import { PaginationTransformer } from '@src/shared/transformers/pagination.transformer';
-import { plainToInstance } from 'class-transformer';
+async getMany(query: GetExampleQueryDto): Promise<PaginationResponseDto<ExampleResponseDto>> {
+  const [items, total] = await this.repository.getManyByQuery(filters, {
+    skip: query.skip,
+    take: query.take,
+  });
 
-@Injectable()
-export class ExampleService {
-  constructor(
-    private readonly logger: LogService,
-    private readonly repository: ExampleRepository,
-  ) {
-    this.logger.setContext(`${this.constructor.name}`);
-  }
-
-  async getMany(
-    query: GetExampleQueryDto,
-  ): Promise<PaginationResponseDto<ExampleResponseDto>> {
-    // Use repository's getManyByQuery with pagination options
-    const [items, total] = await this.repository.getManyByQuery(filters, {
-      skip: query.skip,
-      take: query.take,
-    });
-
-    // Transform using PaginationTransformer
-    return PaginationTransformer.toPaginationResponseDto(
-      items,
-      total,
-      query.take,
-      query.skip,
-    );
-  }
-}
-```
-
-### Pagination with Custom Transformation
-
-```typescript
-async getUsersWithCustomTransform(
-  query: GetUsersQueryDto,
-): Promise<PaginationResponseDto<UserSummaryDto>> {
-  const [users, total] = await this.userRepository.getManyByQuery(
-    query,
-    { skip: query.skip, take: query.take }
-  );
-
-  // Use custom transformer function
   return PaginationTransformer.toPaginationResponseDto(
-    users,
+    items,
     total,
     query.take,
     query.skip,
-    (user) => ({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      status: user.status,
-      // Custom transformation logic
-      displayName: `${user.firstName} ${user.lastName}`,
-      isActive: user.status === 'active',
-    }),
   );
 }
 ```
 
-## Repository Usage Pattern
-
-**ALWAYS use the repository's `getManyByQuery` method with pagination options:**
+**With custom transformation:**
 
 ```typescript
-// CORRECT - Use getManyByQuery with pagination options
+return PaginationTransformer.toPaginationResponseDto(
+  items,
+  total,
+  query.take,
+  query.skip,
+  (item) => ({
+    id: item.id,
+    // custom transformation logic
+  }),
+);
+```
+
+## Repository Usage
+
+Always use `getManyByQuery` with pagination options:
+
+```typescript
 const [items, total] = await this.repository.getManyByQuery(filters, {
   skip: query.skip,
   take: query.take,
 });
-
-// CORRECT - For simple queries without filters
-const [items, total] = await this.repository.getManyByQuery(
-  {},
-  { skip: query.skip, take: query.take },
-);
 ```
 
 ## Best Practices
 
-### 1. Query DTO Design
-
-- **ALWAYS extend PaginationQueryDto** for paginated queries
-- Add specific filter properties as optional fields
-- Use appropriate validation decorators
-- Keep query DTOs focused on filtering and pagination
-
-```typescript
-export class GetProductsQueryDto extends PaginationQueryDto {
-  @IsOptional()
-  @IsString()
-  category?: string;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(10000)
-  minPrice?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(10000)
-  maxPrice?: number;
-
-  @IsOptional()
-  @IsEnum(ProductStatus)
-  status?: ProductStatus;
-}
-```
-
-### 2. Response DTO Design
-
-- **ALWAYS extend PaginationResponseDto<T>** for paginated responses
-- Define the data property with the correct type
-- Use descriptive names (e.g., `GetUsersResponseDto`)
-
-```typescript
-export class GetProductsResponseDto extends PaginationResponseDto<ProductResponseDto> {
-  data: ProductResponseDto[];
-}
-```
-
-### 3. Service Method Naming
-
-- Use descriptive names that indicate pagination: `getMany`, `getUsers`, `searchProducts`
-- Avoid names like `getAll` or `list` for paginated methods
-- Use `getById` for single item retrieval
-
-### 4. Filter Building
-
-- Build filters dynamically based on query parameters
-- Use repository filter strategies for complex queries
+- Extend `PaginationQueryDto` for query DTOs
+- Extend `PaginationResponseDto<T>` for response DTOs
+- Add filter properties as optional fields with validation
+- Use descriptive method names: `getMany`, `getUsers` (not `getAll` or `list`)
 - Keep filter logic in services, not repositories
-
-### 5. Performance Considerations
-
-- Set reasonable default limits (e.g., max 1000 items)
+- Set reasonable limits (max 1000 items)
 - Use database indexes for filtered fields
-- Consider caching for frequently accessed paginated data
-- Validate query parameters to prevent abuse
 
-### 6. Logging
+## Anti-Patterns (Don't Do)
 
-- Log pagination parameters for debugging
-- Log performance metrics for large datasets
-- Use appropriate log levels
-
-```typescript
-this.logger.debug(
-  `Getting users with pagination: skip=${query.skip}, take=${query.take}`,
-);
-this.logger.info(`Retrieved ${users.length} users out of ${total} total`);
-```
-
-## Common Anti-Patterns to Avoid
-
-### ❌ Don't Create Custom Pagination Logic
-
-```typescript
-// BAD - Custom pagination implementation
-async getUsersBad(query: any) {
-  const offset = (query.page - 1) * query.limit;
-  const users = await this.repository.find({
-    skip: offset,
-    take: query.limit,
-  });
-  const total = await this.repository.count();
-
-  return {
-    data: users,
-    page: query.page,
-    limit: query.limit,
-    total,
-    // Custom pagination logic - DON'T DO THIS
-  };
-}
-```
-
-### ❌ Don't Skip PaginationQueryDto
-
-```typescript
-// BAD - Not extending PaginationQueryDto
-export class BadQueryDto {
-  @IsNumber()
-  page: number;
-
-  @IsNumber()
-  limit: number;
-
-  // Missing standard pagination properties
-}
-```
-
-### ❌ Don't Return Raw Entities
-
-```typescript
-// BAD - Returning raw entities without transformation
-async getUsersBad(query: GetUsersQueryDto) {
-  const [users, total] = await this.repository.getManyByQuery(query);
-  return {
-    data: users, // BAD - raw entities exposed
-    total,
-    // ... pagination info
-  };
-}
-```
-
-### ❌ Don't Use Custom Repository Methods for Simple Pagination
-
-```typescript
-// BAD - Custom repository method for simple pagination
-// In Repository
-async findWithPagination(filters: any, skip: number, take: number) {
-  return this.getManyByQuery(filters, { skip, take }); // Unnecessary wrapper
-}
-
-// In Service
-const [users, total] = await this.repository.findWithPagination(query, query.skip, query.take);
-```
+❌ Custom pagination logic
+❌ Not extending `PaginationQueryDto`
+❌ Returning raw entities without transformation
+❌ Custom repository wrappers for simple pagination
 
 ## Summary
 
-1. **Query DTOs**: ALWAYS extend `PaginationQueryDto`
-2. **Response DTOs**: ALWAYS extend `PaginationResponseDto<T>`
-3. **Services**: ALWAYS use `PaginationTransformer.toPaginationResponseDto()`
-4. **Repositories**: ALWAYS use `getManyByQuery(filters, { skip, take })`
-5. **Controllers**: Accept query DTOs and return response DTOs
-6. **Transformation**: ALWAYS transform entities to DTOs using `plainToInstance`
-7. **Error Handling**: Validate query parameters and handle errors appropriately
-8. **Logging**: Log pagination operations for debugging and monitoring
-
-This rule ensures consistent pagination implementation across the entire NestJS application using the shared pagination infrastructure.
+1. Query DTOs → extend `PaginationQueryDto`
+2. Response DTOs → extend `PaginationResponseDto<T>`
+3. Services → use `PaginationTransformer.toPaginationResponseDto()`
+4. Repositories → use `getManyByQuery(filters, { skip, take })`

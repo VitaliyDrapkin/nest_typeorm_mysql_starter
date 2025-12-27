@@ -1,0 +1,162 @@
+---
+globs: src/modules/**/services/*.ts
+---
+
+# Service Layering & Domain Separation
+
+## Core Principle
+
+**One service = one domain responsibility. Keep services < 300 lines.**
+
+## Layer Types
+
+| Layer           | Responsibility            | Examples                                |
+| --------------- | ------------------------- | --------------------------------------- |
+| **CRUD**        | Database operations       | `UserService`, `LobbyService`           |
+| **State**       | In-memory state           | `LobbyStateService`, `GameStateService` |
+| **Lifecycle**   | Entity lifecycle events   | `LobbyLifecycleService`                 |
+| **Business**    | Domain logic & validation | `UserAuthService`, `PaymentService`     |
+| **Socket**      | WebSocket orchestration   | `PvpSocketService`, `ChatSocketService` |
+| **Integration** | External APIs             | `TelegramApiService`                    |
+
+## When to Split
+
+**Split immediately if:**
+
+- Service > 300 lines
+- Manages in-memory state AND database
+- Mixes lifecycle with CRUD
+- Name too generic (`GameService`)
+
+**Example:**
+
+```typescript
+// ❌ BAD - god-mode service
+@Injectable()
+export class LobbyService {
+  private lobbyManager = new LobbyManagerModel(); // state
+  createLobby() {
+    /* ... */
+  } // CRUD
+  addUserToLobby() {
+    /* ... */
+  } // state
+  scheduleLobbyClosure() {
+    /* ... */
+  } // lifecycle
+}
+
+// ✅ GOOD - split by layers
+@Injectable()
+export class LobbyService {
+  async createLobby(data: CreateLobbyDto) {
+    /* ... */
+  }
+  async getLobbyById(id: number) {
+    /* ... */
+  }
+}
+
+@Injectable()
+export class LobbyStateService {
+  private lobbyManager = new LobbyManagerModel();
+  addUserToLobby(lobbyId: number, user: LobbyUser) {
+    /* ... */
+  }
+}
+
+@Injectable()
+export class LobbyLifecycleService {
+  constructor(
+    private readonly lobbyService: LobbyService,
+    private readonly lobbyStateService: LobbyStateService,
+  ) {}
+
+  scheduleLobbyClosure(lobbyId: number, timeoutMs: number) {
+    /* ... */
+  }
+}
+```
+
+## Method Decomposition
+
+**Break complex methods into small, focused private methods (5-20 lines each):**
+
+```typescript
+// ❌ BAD - one method doing everything
+async joinLobby(userId: number, data: JoinLobbyDto) {
+  const lobby = await this.lobbyRepository.findOne({ where: { id: data.lobbyId } });
+  if (!lobby) throw new NotFoundException('Lobby not found');
+  if (lobby.status !== 'open') throw new BadRequestException('Lobby closed');
+
+  const users = this.getLobbyUsers(data.lobbyId);
+  if (users.length >= lobby.maxPlayers) throw new BadRequestException('Lobby full');
+
+  if (lobby.password && lobby.password !== data.password) {
+    throw new BadRequestException('Invalid password');
+  }
+
+  const user = this.addUserToLobby(data.lobbyId, { userId, isReady: false });
+  this.socketService.emitToRoom(`lobby:${data.lobbyId}`, 'userJoined', user);
+  return { success: true, user };
+}
+
+// ✅ GOOD - decomposed into focused methods
+async joinLobby(userId: number, data: JoinLobbyDto) {
+  const lobby = await this.validateLobbyAccess(data.lobbyId, data.password);
+  this.validateLobbyCapacity(data.lobbyId, lobby.maxPlayers);
+
+  const user = await this.addUserToLobby(data.lobbyId, userId);
+  await this.notifyLobbyUsers(data.lobbyId, user);
+
+  return { success: true, user };
+}
+
+private async validateLobbyAccess(lobbyId: number, password?: string) {
+  const lobby = await this.lobbyService.getLobbyById(lobbyId);
+
+  if (!lobby) throw new NotFoundException('Lobby not found');
+  if (lobby.status !== 'open') throw new BadRequestException('Lobby is closed');
+  if (lobby.password && lobby.password !== password) {
+    throw new BadRequestException('Invalid password');
+  }
+
+  return lobby;
+}
+
+private validateLobbyCapacity(lobbyId: number, maxPlayers: number): void {
+  const users = this.lobbyStateService.getLobbyUsers(lobbyId);
+  if (users.length >= maxPlayers) {
+    throw new BadRequestException('Lobby is full');
+  }
+}
+```
+
+## Dependency Rules
+
+```typescript
+// ✅ Dependencies flow ONE direction
+@Injectable()
+export class LobbyLifecycleService {
+  constructor(
+    private readonly lobbyService: LobbyService, // ← CRUD layer
+    private readonly lobbyStateService: LobbyStateService, // ← State layer
+  ) {}
+}
+
+// ❌ BAD - circular dependencies
+@Injectable()
+export class LobbyService {
+  constructor(
+    private readonly lobbyLifecycleService: LobbyLifecycleService, // ❌
+  ) {}
+}
+```
+
+## Quick Checklist
+
+- ✅ Split services > 300 lines by domain layer
+- ✅ Decompose methods: public → multiple private (5-20 lines each)
+- ✅ Dependencies flow in ONE direction (no circular deps)
+- ❌ No god-mode services mixing multiple concerns
+- ❌ No 50+ line methods doing everything

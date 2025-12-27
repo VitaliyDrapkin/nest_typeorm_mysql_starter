@@ -1,5 +1,6 @@
 import {
   Body,
+  ClassSerializerInterceptor,
   Controller,
   Get,
   Param,
@@ -11,13 +12,14 @@ import { ApiTags } from '@nestjs/swagger';
 import { UserResponseDto } from '../dto/responses/user.response.dto';
 import { UsersService } from '../services/users.service';
 import { GetUsersQueryDto } from '../dto/queries/get-users.query.dto';
-import { PaginationResponseDto } from '@src/shared/dtos/pagination.response.dto';
+import { PaginationResponseDto } from '@src/shared/dto/pagination.response.dto';
 import { CreateUserRequestDto } from '../dto/requests/create-user.request.dto';
 import { CurrentUser } from '@src/common/decorators/current-user.decorator';
 import { User } from '@telegram-apps/init-data-node';
 import { Public } from '@src/common/decorators/public.decorator';
 import { CustomTimeout } from '@src/common/decorators/custom-timeout.decorator';
 
+@UseInterceptors(ClassSerializerInterceptor)
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
@@ -28,6 +30,7 @@ export class UsersController {
     return this.usersService.addUser(user);
   }
 
+  @Public()
   @Get('')
   async getUsers(
     @Query() query: GetUsersQueryDto,
@@ -35,6 +38,7 @@ export class UsersController {
     return this.usersService.getUsers(query);
   }
 
+  @Public()
   @Get(':id')
   async getUserById(@Param('id') id: number): Promise<UserResponseDto> {
     return this.usersService.getById(id);

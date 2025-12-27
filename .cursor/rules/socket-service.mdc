@@ -1,0 +1,95 @@
+# Socket Service API Reference
+
+Services that handle WebSocket business logic use **shared SocketService** for all socket operations.
+
+## Quick Reference
+
+**REQUIRED**: Always inject and use SocketService. Never access Socket.IO directly.
+
+```typescript
+import { SocketService } from '@src/shared/services/socket/socket.service';
+
+@Injectable()
+export class PvpService {
+  constructor(
+    private readonly socketService: SocketService,
+    private readonly logger: LogService,
+  ) {}
+}
+```
+
+## Available Operations
+
+### Emit Events
+
+```typescript
+// To specific user
+this.socketService.emitToUser(userId, 'game:update', data);
+
+// To multiple users
+this.socketService.emitToUsers([userId1, userId2], 'event', data);
+
+// To room
+this.socketService.emitToRoom('lobby:123', 'event', data);
+
+// To all connected
+this.socketService.emitToAll('server:restart', data);
+
+// To all except specific users
+this.socketService.emitToAllExceptUsers([userId], 'event', data);
+```
+
+### Room Management
+
+```typescript
+// Join/remove users
+await this.socketService.joinUserToRoom(userId, 'lobby:123');
+await this.socketService.joinUsersToRoom([userId1, userId2], 'lobby:123');
+await this.socketService.removeUserFromRoom(userId, 'lobby:123');
+
+// Room operations
+this.socketService.clearRoom('lobby:123');
+const isInRoom = this.socketService.isUserInRoom(userId, 'lobby:123');
+const size = this.socketService.getRoomSize('lobby:123');
+```
+
+### User Data
+
+```typescript
+// Store/retrieve temporary data on socket
+this.socketService.setUserData(userId, { gameId: 123 });
+const data = this.socketService.getUserData(userId);
+this.socketService.deleteUserData(userId, ['gameId']);
+```
+
+### Connection Info
+
+```typescript
+const isConnected = this.socketService.isUserConnected(userId);
+const userIds = this.socketService.getConnectedUserIds();
+const count = this.socketService.getTotalConnections();
+this.socketService.disconnectUser(userId);
+```
+
+## Error Handling
+
+```typescript
+// Use WsException for WebSocket errors
+if (!lobby) {
+  throw new WsException('Lobby not found');
+}
+
+// Always log operations
+await this.socketService.joinUserToRoom(userId, 'lobby:123');
+this.logger.log('User joined lobby', { userId, lobbyId: 123 });
+```
+
+## Key Points
+
+- ✅ SocketService is shared singleton across all services
+- ✅ Use `SocketUser` type (userId, username, photoUrl)
+- ✅ 5-second grace period for reconnections
+- ❌ DO NOT access Socket.IO Server/Namespace/Socket directly
+- ❌ DO NOT inject Socket instances
+
+For detailed examples and complete API, see `@src/shared/services/socket/socket.md`.

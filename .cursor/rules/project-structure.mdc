@@ -6,56 +6,17 @@ alwaysApply: false
 
 # Project Structure Guidelines
 
-This document outlines the standard project structure and organization for our NestJS applications.
-
 ## Root Directory Structure
 
 src/
 ├── main.ts # Application entry point
 ├── app.module.ts # Root application module
 ├── modules/ # Feature modules
-├── shared/ # Shared utilities and helpers
-├── database/ # Database configuration and migrations
-├── core/ # Core application features
+├── shared/ # Shared utilities (api-manager, dtos, transformers, types)
+├── database/ # Database migrations and seeders
+├── core/ # Exceptions, guards, interceptors, logger
 ├── config/ # Configuration management
-└── common/ # Common utilities and decorators
-
-## Core Components
-
-### 1. Core (`src/core/`)
-
-Global features and modules:
-
-- `exceptions/` — Global error handling
-- `guards/` — Authentication guards
-- `interceptors/` — Request/response interceptors
-- `logger/` — Winston-based logging
-- `core.module.ts` — Global module registration
-
-### 2. Common (`src/common/`)
-
-Reusable utilities:
-
-- `decorators/` — Custom decorators
-- `dto/` — Shared DTOs
-- `enums/` — Common enums
-- `base-repository.ts` — Extended TypeORM repository
-
-### 3. Database (`src/database/`)
-
-Database management:
-
-- `migration/` — Database migrations
-- `seeders/` — Database seeders
-
-### 4. Shared (`src/shared/`)
-
-Shared utilities:
-
-- `api-manager/` — Internal API requests
-- `dtos/` — Shared DTOs
-- `transformers/` — Data transformers
-- `types/` — Common types
+└── common/ # Decorators, DTOs, enums, base-repository
 
 ## Module Structure
 
@@ -70,7 +31,7 @@ Each feature module should follow this structure:
 │ ├── queries/ # GET query DTOs
 │ ├── requests/ # POST/PUT/PATCH DTOs
 │ └── response/ # Response DTOs
-├── interfaces/ # Module-specific types
+├── types/ # Interfaces, types, enums (see @types.mdc)
 └── module-name.module.ts # Module definition
 
 ## Module Guidelines
@@ -83,52 +44,15 @@ Each feature module should follow this structure:
    - A module must NOT import services or repositories from other modules
    - Only services should be exported
 
-2. **File Organization**:
-
-   - Keep related files close together
-   - Use clear, descriptive names
-   - Follow the standard structure for consistency
-
-3. **Code Organization**:
-   - Place business logic in services
-   - Keep controllers thin
+2. **Code Organization**:
+   - Place business logic in services, keep controllers thin
    - Use repositories for database operations
+   - Keep files focused, single-purpose with clear names
    - Define clear interfaces and DTOs
 
 ## Best Practices
 
-1. **Module Independence**:
-
-   - Modules should be self-contained
-   - Use dependency injection
-   - Avoid circular dependencies
-
-2. **Code Organization**:
-
-   - Keep files focused and single-purpose
-   - Use clear naming conventions
-   - Document complex logic
-
-3. **Type Safety**:
-
-   - Use TypeScript interfaces and types
-   - Define DTOs for all data structures
-   - Use class-validator for validation
-
-4. **Testing**:
-   - Place tests alongside the code they test
-   - Follow the same directory structure
-   - Use descriptive test names
-
-## Configuration
-
-- Environment variables in `.env`
-- Configuration validation in `validation.schema.ts`
-- Module-specific config in `config/` directory
-
-## Logging
-
-- Use the built-in Winston logger
-- Log levels: debug, info, warn, error
-- Configure logging in `.env`
-- File logging available in `logs/` directory
+- Modules should be self-contained, avoid circular dependencies
+- Use dependency injection
+- Use TypeScript interfaces, types, and class-validator for validation
+- Document complex logic

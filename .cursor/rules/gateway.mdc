@@ -1,0 +1,166 @@
+---
+globs: src/modules/**/gateways/*.ts
+---
+
+# NestJS WebSocket Gateway Guidelines
+
+This document outlines the best practices for structuring WebSocket gateways in our project.
+
+## Gateway Structure
+
+### File Location
+
+- Place gateways in `src/modules/{module-name}/gateways/`
+- Name files as `{feature}.gateway.ts`
+
+### Gateway Decorators
+
+```typescript
+@Injectable()
+@UseFilters(AllWsExceptionsFilter)
+@WebSocketGateway({
+  namespace: 'ws',
+  cors: { origin: '*' },
+})
+export class PvpGateway
+  implements OnModuleInit, OnModuleDestroy, OnGatewayConnection, OnGatewayDisconnect
+```
+
+- Always use `@WebSocketGateway()` with namespace
+- Use `@UseFilters(AllWsExceptionsFilter)` for error handling
+- Implement lifecycle hooks: `OnModuleInit`, `OnModuleDestroy`, `OnGatewayConnection`, `OnGatewayDisconnect`
+
+### Service Integration
+
+**REQUIRED**: Gateway delegates to service that handles socket operations.
+
+```typescript
+@WebSocketServer()
+nsp: Namespace;
+
+constructor(
+  private readonly socketService: SocketService,
+  private readonly pvpService: PvpService,
+  private readonly logger: LogService,
+) {
+  this.logger.setContext(this.constructor.name);
+}
+
+onModuleInit() {
+  // 1. Initialize SocketService with namespace
+  this.socketService.setNamespace(this.nsp);
+
+  // 2. Register disconnection callback (delegates to service)
+  this.socketService.registerDisconnectionCallback(
+    'PvpGateway',
+    this.handleUserDisconnection.bind(this),
+  );
+}
+
+onModuleDestroy() {
+  // Clean up callbacks
+  this.socketService.unregisterDisconnectionCallback('PvpGateway');
+}
+```
+
+**Note**: Service will have access to SocketService for all socket operations (emit, rooms, etc). See `@socket-service.mdc` for service socket usage.
+
+### Connection Handling
+
+**REQUIRED**: Delegate authentication and connection management to SocketService.
+
+```typescript
+async handleConnection(client: Socket): Promise<void> {
+  await this.socketService.handleConnection(client);
+}
+
+async handleDisconnect(client: Socket): Promise<void> {
+  await this.socketService.handleDisconnect(client);
+}
+
+// Handle business logic after grace period (5s)
+private async handleUserDisconnection(user: SocketUser): Promise<void> {
+  try {
+    await this.pvpService.handleDisconnection(user);
+  } catch (error) {
+    this.logger.error('Error handling disconnection', { userId: user.userId });
+  }
+}
+```
+
+### Event Handlers
+
+```typescript
+@SubscribeMessage('lobby:join')
+async handleLobbyJoin(
+  @ConnectedSocket() client: Socket,
+  @MessageBody() data: JoinLobbyRequestDto,
+) {
+  const user = client.data.user;
+  await this.pvpService.handleLobbyJoin(user, data);
+}
+```
+
+- Use `@SubscribeMessage('event:name')` for event handlers
+- Use `@ConnectedSocket()` to access client socket
+- Use `@MessageBody()` with request DTOs for type safety
+- Extract `user` from `client.data.user` (set by SocketService)
+
+## Business Logic Prohibition
+
+**CRITICAL**: Gateways should NEVER contain business logic. Gateways only delegate to services.
+
+### ❌ Bad - Business Logic in Gateway
+
+```typescript
+@SubscribeMessage('lobby:join')
+async handleLobbyJoin(@ConnectedSocket() client: Socket, @MessageBody() data: JoinLobbyRequestDto) {
+  // ❌ NO! Business logic in gateway
+  const lobby = await this.lobbyRepository.findOne({ where: { id: data.lobbyId } });
+  if (!lobby) {
+    throw new WsException('Lobby not found');
+  }
+  await this.socketService.joinUserToRoom(client.data.user.userId, `lobby:${data.lobbyId}`);
+}
+```
+
+### ✅ Good - Gateway Delegates to Service
+
+```typescript
+@SubscribeMessage('lobby:join')
+async handleLobbyJoin(@ConnectedSocket() client: Socket, @MessageBody() data: JoinLobbyRequestDto) {
+  // ✅ YES! Only delegates to service
+  const user = client.data.user;
+  await this.pvpService.handleLobbyJoin(user, data);
+}
+```
+
+### Responsibilities
+
+**Gateways should ONLY handle:**
+
+- WebSocket connection/disconnection lifecycle
+- Event listener registration
+- Parameter extraction from socket events
+- Delegating to services
+
+**Services should handle:**
+
+- All business logic
+- Data validation
+- Socket operations (emit, rooms, user data) via shared SocketService
+- Room management
+- Event emissions
+
+See `@socket-service.mdc` for complete socket operations guide.
+
+## Summary
+
+- ❌ DO NOT put business logic in gateways
+- ✅ Gateway only initializes SocketService and delegates to services
+- ✅ Implement lifecycle hooks (OnModuleInit, OnModuleDestroy)
+- ✅ Register disconnection callbacks in onModuleInit
+- ✅ Delegate all business logic to services
+- ✅ Service handles ALL socket operations (see `@socket-service.mdc`)
+- ✅ Use DTOs for type-safe event handling
+- ✅ Extract user from `client.data.user`

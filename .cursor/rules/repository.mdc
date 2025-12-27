@@ -1,246 +1,139 @@
 ---
-globs: src/modules/**/repositories/*.ts
+globs: src/modules/**/services/*.ts
 ---
 
-# Repository Guidelines
+# Database Access Rules
 
-This document outlines best practices for implementing and using repositories in our NestJS application.
+## ⛔ DO NOT create custom repositories
 
-## Core Principle
+**All database operations should be done directly in services via @InjectRepository.**
 
-**Repositories should ONLY handle data access patterns and filters. All business logic belongs in services.**
-
-## Base Repository Usage
-
-The `BaseRepository` class provides a complete foundation for all repositories. It includes all necessary CRUD operations and query filtering capabilities.
-
-### Key Features
-
-1. **Type Safety**
-
-   - Generic type parameters for entity and filter keys
-   - Type-safe query building
-   - Automatic relation handling
-
-2. **Built-in Operations**
-   - `addOne`/`addMany`: Create single or multiple records
-   - `getById`: Fetch by primary key
-   - `getOneByQuery`/`getManyByQuery`: Search with filters
-   - `updateById`/`updateManyByQuery`: Update records
-   - `deleteById`/`deleteManyByQuery`: Soft delete records
-   - `countByQuery`: Count matching records
-
-### Standard Implementation
+## Repository Injection
 
 ```typescript
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+
 @Injectable()
-export class UserRepository extends BaseRepository<
-  UserEntity,
-  ['id', 'email', 'name', 'status', 'createdAt']
-> {
+export class UserService {
   constructor(
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
-  ) {
-    super(userRepository);
-  }
-
-  protected filterStrategies() {
-    return {
-      id: (value: number) => ({
-        id: value,
-      }),
-      email: (value: string) => ({
-        email: ILike(`%${value}%`),
-      }),
-      name: (value: string) => ({
-        name: ILike(`%${value}%`),
-      }),
-      status: (value: string[]) => ({
-        status: In(value),
-      }),
-      createdAt: (value: { start: Date; end: Date }) => ({
-        createdAt: Between(value.start, value.end),
-      }),
-    };
-  }
-
-  protected getRelations(): string[] {
-    return ['profile', 'roles']; // Only load necessary relations
-  }
+  ) {}
 }
 ```
 
-## Filter Strategies - The Core Responsibility
-
-Filter strategies are the PRIMARY responsibility of repositories. They define how query parameters are transformed into TypeORM filters.
-
-### Common Filter Patterns
-
-1. **Exact Match**
+## TypeORM Methods
 
 ```typescript
-id: (value: number) => ({
-  id: value,
-});
+// Retrieval
+await this.userRepository.findOne({ where: { id } });
+await this.userRepository.find({ where: filters });
+await this.userRepository.findAndCount({ where: filters, skip, take });
+await this.userRepository.count({ where: filters });
+
+// Create/Update
+await this.userRepository.save(entity);
+await this.userRepository.save([entities]);
+await this.userRepository.update({ id }, updateData);
+
+// Delete
+await this.userRepository.delete({ id });
 ```
 
-2. **Case-Insensitive Search**
+## Update with Conditions
+
+**Prefer `update()` over `createQueryBuilder()` for simple updates** - it's more readable and concise.
 
 ```typescript
-name: (value: string) => ({
-  name: ILike(`%${value}%`),
-});
-```
+import { LessThan, In } from 'typeorm';
 
-3. **Date Range Filtering**
-
-```typescript
-dateRange: (value: { start: Date; end: Date }) => ({
-  createdAt: Between(value.start, value.end),
-});
-```
-
-4. **Multiple Values (Array)**
-
-```typescript
-status: (value: string[]) => ({
-  status: In(value),
-});
-```
-
-5. **Complex Nested Filters**
-
-```typescript
-userProfile: (value: { age: number; city: string }) => ({
-  profile: {
-    age: MoreThanOrEqual(value.age),
-    city: ILike(`%${value.city}%`),
+// Simple update with multiple conditions and operators
+const result = await this.gameRepository.update(
+  {
+    status: 'ongoing',
+    updatedAt: LessThan(oneHourAgo),
   },
+  { status: 'canceled' },
+);
+const updatedCount = result.affected || 0;
+
+// Update with IN operator
+await this.orderRepository.update(
+  { status: In(['pending', 'processing']) },
+  { status: 'expired' },
+);
+```
+
+Use `createQueryBuilder()` only for complex scenarios (OR logic, joins, subqueries).
+
+## Dynamic Filters
+
+Transform DTO parameters into TypeORM operators:
+
+```typescript
+import { In, ILike, Between, LessThan, MoreThan } from 'typeorm';
+
+private buildFilters(query: GetUsersQueryDto): Record<string, any> {
+  const filters: Record<string, any> = {};
+
+  const strategies: Record<string, ((value: any) => Record<string, any>) | null> = {
+    status: (value: string[]) => ({ status: In(value) }),
+    name: (value: string) => ({ name: ILike(`%${value}%`) }),
+    email: (value: string) => ({ email: ILike(`%${value}%`) }),
+    createdAtRange: (value: { start: Date; end: Date }) => ({
+      createdAt: Between(value.start, value.end)
+    }),
+  };
+
+  for (const [key, value] of Object.entries(query)) {
+    if (value === undefined || value === null) continue;
+
+    const strategy = strategies[key];
+    if (strategy) {
+      Object.assign(filters, strategy(value));
+    }
+  }
+
+  return filters;
+}
+
+// Usage
+const filters = this.buildFilters(query);
+const [users, total] = await this.userRepository.findAndCount({
+  where: filters,
+  skip: query.skip,
+  take: query.take,
 });
 ```
 
-## When to Create New Methods
-
-**ONLY create new methods when you need complex QueryBuilder operations that cannot be achieved with filter strategies.**
-
-### Acceptable New Methods
-
-1. **Complex Joins with QueryBuilder**
+## Complex Queries via QueryBuilder
 
 ```typescript
-async getUsersWithComplexJoin(filters: ComplexFilters): Promise<UserEntity[]> {
-  return this.repository
+async getUsersWithStats(minOrders: number): Promise<UserEntity[]> {
+  return await this.userRepository
     .createQueryBuilder('user')
     .leftJoin('user.orders', 'order')
-    .leftJoin('order.products', 'product')
-    .where('product.category = :category', { category: filters.category })
+    .select([
+      'user.id',
+      'user.name',
+      'COUNT(order.id) as orderCount',
+      'SUM(order.total) as totalSpent',
+    ])
+    .where('user.status = :status', { status: 'active' })
     .groupBy('user.id')
-    .having('COUNT(order.id) > :minOrders', { minOrders: filters.minOrders })
-    .getMany();
-}
-```
-
-2. **Raw SQL for Performance**
-
-```typescript
-async getUserStatistics(): Promise<UserStats[]> {
-  return this.repository.query(`
-    SELECT
-      u.id,
-      COUNT(o.id) as order_count,
-      SUM(o.total) as total_spent
-    FROM users u
-    LEFT JOIN orders o ON u.id = o.user_id
-    GROUP BY u.id
-  `);
-}
-```
-
-## What NOT to Do in Repositories
-
-❌ **Don't add business logic**
-
-```typescript
-// BAD - Business logic in repository
-async getActiveUsersWithRecentOrders(): Promise<UserEntity[]> {
-  const users = await this.getManyByQuery({ status: 'active' });
-  return users.filter(user => user.lastOrderDate > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
-}
-```
-
-❌ **Don't create methods that just call base methods**
-
-```typescript
-// BAD - Unnecessary wrapper method
-async findUserByEmail(email: string): Promise<UserEntity> {
-  return this.getOneByQuery({ email });
-}
-```
-
-❌ **Don't add validation or transformation logic**
-
-```typescript
-// BAD - Validation belongs in DTOs/Services
-async createUser(userData: any): Promise<UserEntity> {
-  if (!userData.email || !userData.name) {
-    throw new Error('Email and name are required');
-  }
-  return this.addOne(userData);
-}
-```
-
-## Best Practices
-
-1. **Use Base Repository Methods in Services**
-
-   - Services should call `repository.getOneByQuery(filters)` instead of custom repository methods
-   - Services should call `repository.updateManyByQuery(filters, data)` for bulk updates
-   - Only create custom repository methods for complex QueryBuilder operations
-
-2. **Focus on Filter Strategies**
-
-   - Define comprehensive filter strategies for all queryable fields
-   - Use TypeORM operators (Like, ILike, Between, In, MoreThan, LessThan) appropriately
-   - Keep filter transformations simple and focused
-
-3. **Minimal Relations**
-
-   - Only load relations that are frequently needed
-   - Services can specify additional relations when needed using repository options
-
-4. **Type Safety**
-   - Always specify correct generic types for entity and filter keys
-   - Use readonly arrays for filter keys to prevent modification
-
-## Service Integration Examples
-
-Services should use repository methods directly with filters:
-
-```typescript
-// In Service - Good approach
-async findActiveUsersByName(name: string): Promise<UserResponseDto[]> {
-  const users = await this.userRepository.getManyByQuery({
-    name,
-    status: ['active']
-  });
-  return users.map(user => plainToInstance(UserResponseDto, user));
-}
-
-// In Service - Update users by criteria
-async deactivateInactiveUsers(): Promise<number> {
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const result = await this.userRepository.updateManyByQuery(
-    { lastLoginDate: { end: thirtyDaysAgo } },
-    { status: 'inactive' }
-  );
-  return result.affected;
+    .having('COUNT(order.id) >= :minOrders', { minOrders })
+    .orderBy('totalSpent', 'DESC')
+    .getRawMany();
 }
 ```
 
 ## Summary
 
-- **Repositories**: Handle data access, filters, and complex queries only
-- **Services**: Handle business logic, validation, and orchestration
-- **Avoid**: Creating unnecessary methods in repositories
-- **Focus**: On comprehensive filter strategies and efficient data access patterns
+- ❌ DO NOT create custom repositories
+- ✅ Use @InjectRepository in services
+- ✅ TypeORM methods: find, findOne, save, update, delete, count
+- ✅ Prefer `update()` with conditions over `createQueryBuilder()` when possible
+- ✅ Use TypeORM operators (LessThan, In, IsNull, etc.) in update conditions
+- ✅ buildFilters() for dynamic filters
+- ✅ createQueryBuilder() only for complex queries (JOIN, GROUP BY, HAVING, OR logic)

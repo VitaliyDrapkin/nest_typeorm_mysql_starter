@@ -1,4 +1,4 @@
-import { PaginationQueryDto } from '@src/shared/dtos/pagination.query.dto';
+import { PaginationQueryDto } from '@src/shared/dto/pagination.query.dto';
 import { IsOptional, IsString } from 'class-validator';
 
 export class GetUsersQueryDto extends PaginationQueryDto {

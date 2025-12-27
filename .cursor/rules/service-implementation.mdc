@@ -1,0 +1,116 @@
+---
+globs: src/modules/**/services/*.ts
+---
+
+# Service Implementation Rules
+
+## Service Structure
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { plainToInstance } from 'class-transformer';
+import { LogService } from '@src/core/logger/log-service';
+
+@Injectable()
+export class UserService {
+  constructor(
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
+    private readonly logger: LogService,
+  ) {
+    this.logger.setContext(this.constructor.name);
+  }
+}
+```
+
+## REQUIRED: plainToInstance
+
+**ALWAYS return DTOs, NEVER raw entities:**
+
+```typescript
+// ❌ BAD - exposes all entity fields
+async getUser(id: number): Promise<UserEntity> {
+  return await this.userRepository.findOne({ where: { id } });
+}
+
+// ✅ GOOD - controlled field exposure
+async getUser(id: number): Promise<UserResponseDto> {
+  const user = await this.userRepository.findOne({ where: { id } });
+  
+  if (!user) {
+    throw new NotFoundException(`User ${id} not found`);
+  }
+  
+  return plainToInstance(UserResponseDto, user, {
+    excludeExtraneousValues: true,
+  });
+}
+
+// For arrays
+return users.map(u => 
+  plainToInstance(UserResponseDto, u, { excludeExtraneousValues: true })
+);
+```
+
+## Error Handling
+
+```typescript
+// Entity not found
+if (!user) throw new NotFoundException(`User ${id} not found`);
+
+// Invalid input
+if (!valid) throw new BadRequestException('Invalid input');
+
+// Uniqueness violation
+if (exists) throw new ConflictException('Already exists');
+```
+
+## Dependency Injection
+
+```typescript
+// ✅ ALLOWED
+@Injectable()
+export class OrderService {
+  constructor(
+    @InjectRepository(OrderEntity)        // ✅ Own entity
+    private readonly orderRepository: Repository<OrderEntity>,
+    private readonly userService: UserService,      // ✅ Foreign service
+    private readonly logger: LogService,            // ✅ Core service
+  ) {}
+}
+
+// ❌ FORBIDDEN
+@Injectable()
+export class OrderService {
+  constructor(
+    @InjectRepository(UserEntity)         // ❌ Foreign entity
+    private readonly userRepository: Repository<UserEntity>,
+    @Inject('SOCKET_IO')                  // ❌ Direct Socket.IO
+    private readonly io: Server,
+  ) {}
+}
+```
+
+## Logging
+
+```typescript
+constructor(private readonly logger: LogService) {
+  this.logger.setContext(this.constructor.name); // Set once
+}
+
+this.logger.log('Operation completed', { userId, result });
+this.logger.error('Operation failed', { error: error.message });
+```
+
+## Quick Checklist
+
+- ✅ Set `logger.setContext()` in constructor
+- ✅ Return `plainToInstance(Dto, entity, { excludeExtraneousValues: true })`
+- ✅ Use NestJS exceptions: `NotFoundException`, `BadRequestException`, etc.
+- ✅ Inject only own entities via `@InjectRepository`
+- ✅ Inject foreign modules via their services
+- ❌ Never return raw entities
+- ❌ Never inject foreign entities
+- ❌ Never use direct Socket.IO injection

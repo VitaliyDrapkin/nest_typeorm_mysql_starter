@@ -1,0 +1,94 @@
+# DomainException Usage Guide
+
+## Overview
+
+`DomainException` is a custom exception class for structured domain error handling with error codes, HTTP status codes, and optional data.
+
+## Basic Usage
+
+```typescript
+import { DomainException } from '@src/common/exceptions/domain.exception';
+import { HttpStatus } from '@nestjs/common';
+
+// Simple exception
+throw new DomainException({
+  errorCode: 'USER_NOT_FOUND',
+  message: 'User not found',
+  statusCode: HttpStatus.NOT_FOUND,
+});
+
+// With additional data
+throw new DomainException({
+  errorCode: 'LOBBY_FULL',
+  message: 'Lobby is full',
+  statusCode: HttpStatus.CONFLICT,
+  data: {
+    maxPlayers: 4,
+    currentPlayers: 4,
+  },
+});
+```
+
+## Example
+
+```typescript
+async getUserById(userId: string) {
+  const user = await this.userRepository.findOne({ where: { id: userId } });
+
+  if (!user) {
+    throw new DomainException({
+      errorCode: 'USER_NOT_FOUND',
+      message: 'User not found',
+      statusCode: HttpStatus.NOT_FOUND,
+    });
+  }
+
+  return user;
+}
+```
+
+## Response Format
+
+**HTTP:**
+
+```json
+{
+  "errorCode": "USER_NOT_FOUND",
+  "message": "User not found",
+  "statusCode": 404,
+  "data": { "optional": "context" }
+}
+```
+
+**WebSocket:** Client receives `exception` event with the same structure.
+
+## Common Error Codes
+
+**User/Auth:** `USER_NOT_FOUND`, `UNAUTHORIZED`, `FORBIDDEN`
+
+**Lobby/Game:** `LOBBY_NOT_FOUND`, `LOBBY_FULL`, `USER_ALREADY_IN_LOBBY`, `INSUFFICIENT_PLAYERS`
+
+**Validation:** `VALIDATION_FAILED`, `INVALID_REQUEST`
+
+**General:** `RESOURCE_NOT_FOUND`, `CONFLICT`, `INTERNAL_SERVER_ERROR`
+
+## Status Codes
+
+- `400` - Bad Request (invalid input)
+- `401` - Unauthorized (auth required)
+- `403` - Forbidden (no permission)
+- `404` - Not Found
+- `409` - Conflict
+- `500` - Internal Server Error
+
+## Best Practices
+
+- Use descriptive error codes
+- Add relevant context in `data` field
+- Use appropriate HTTP status codes
+- Keep messages clear and user-friendly
+- Never expose sensitive data (passwords, tokens)
+
+## Global Handling
+
+`AllExceptionsFilter` automatically handles `DomainException` for both HTTP and WebSocket contexts. No manual catching required.

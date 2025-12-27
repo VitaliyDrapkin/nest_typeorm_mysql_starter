@@ -4,13 +4,13 @@ globs: src/modules/**/controllers/*.ts
 
 # Common Decorators Usage Guidelines
 
-This document outlines the usage of all common decorators available in the project for controllers and routes.
+This document outlines the usage of common decorators available in the project for controllers and routes.
 
 ## Available Decorators
 
-### 1. @CurrentUser()
+### @CurrentUser()
 
-Extracts the authenticated user from the JWT token. The user object is automatically injected by the `CurrentUserInterceptor`.
+Automatically extracts authenticated user information from the JWT token. **Never extract user data from the token manually** - use this decorator instead.
 
 **Import:**
 
@@ -31,227 +31,58 @@ export class UsersController {
 
   @Post()
   create(
-    @Body() createUserDto: CreateUserRequestDto,
+    @Body() createDto: CreateUserRequestDto,
     @CurrentUser() user: JwtUserDetailsDto,
   ) {
-    return this.service.create(createUserDto, user.id);
+    return this.service.create(createDto, user.id);
   }
 }
 ```
 
-**JwtUserDetailsDto Properties:**
+**Important:**
+
+- Always type as `JwtUserDetailsDto`
+- Information is extracted automatically from JWT token
+- Never use `@Req()` or manual token parsing
+
+---
+
+### @Public()
+
+Makes the endpoint public by disabling JWT authentication.
 
 ```typescript
-export class JwtUserDetailsDto {
-  id: number; // User's unique identifier
-  email: string; // User's email address
+@Post('login')
+@Public()
+async login(@Body() loginDto: LoginDto) {
+  return this.authService.login(loginDto);
 }
 ```
 
-### 2. @CustomTimeout()
+---
 
-Sets a custom timeout for a specific route. Useful for long-running operations.
+### @CustomTimeout()
 
-**Import:**
-
-```typescript
-import { CustomTimeout } from '@src/common/decorators/custom-timeout.decorator';
-```
-
-**Usage:**
+Sets a custom timeout for long-running operations.
 
 ```typescript
-@Controller('reports')
-export class ReportsController {
-  @Get('generate')
-  @CustomTimeout(30000) // 30 seconds timeout
-  async generateReport() {
-    // Long-running report generation
-  }
-
-  @Post('upload')
-  @CustomTimeout(60000) // 60 seconds timeout
-  async uploadLargeFile() {
-    // Large file upload operation
-  }
+@Get('generate')
+@CustomTimeout(30000) // 30 seconds
+async generateReport() {
+  return this.service.generate();
 }
 ```
 
-### 3. @Public()
+---
 
-Marks a route as publicly accessible, bypassing JWT authentication.
+### @Roles()
 
-**Import:**
-
-```typescript
-import { Public } from '@src/common/decorators/public.decorator';
-```
-
-**Usage:**
+Restricts access to the endpoint based on user roles.
 
 ```typescript
-@Controller('auth')
-export class AuthController {
-  @Post('login')
-  @Public()
-  async login(@Body() loginDto: LoginDto) {
-    // Public login endpoint
-  }
-
-  @Post('register')
-  @Public()
-  async register(@Body() registerDto: RegisterDto) {
-    // Public registration endpoint
-  }
-
-  @Get('health')
-  @Public()
-  async healthCheck() {
-    // Public health check endpoint
-  }
+@Get('dashboard')
+@Roles(RoleEnum.ADMIN)
+async getDashboard() {
+  return this.service.getDashboard();
 }
 ```
-
-### 4. @Roles()
-
-Restricts access to routes based on user roles. Must be used with the `RolesGuard`.
-
-**Import:**
-
-```typescript
-import { Roles } from '@src/common/decorators/roles.decorator';
-import { RoleEnum } from '@src/common/enums/role.enum';
-```
-
-**Usage:**
-
-```typescript
-@Controller('admin')
-export class AdminController {
-  @Get('dashboard')
-  @Roles(RoleEnum.ADMIN)
-  async getDashboard() {
-    // Only accessible by admins
-  }
-
-  @Get('reports')
-  @Roles(RoleEnum.ADMIN, RoleEnum.MANAGER)
-  async getReports() {
-    // Accessible by both admins and managers
-  }
-
-  @Post('settings')
-  @Roles(RoleEnum.ADMIN)
-  async updateSettings(@Body() settingsDto: SettingsDto) {
-    // Only admins can update settings
-  }
-}
-```
-
-## Best Practices
-
-1. **@CurrentUser()**: Always type the parameter as `JwtUserDetailsDto` for type safety
-2. **@Public()**: Use for authentication-related endpoints (login, register, health checks)
-3. **@Roles()**: Use in combination with `@UseGuards(RolesGuard)` for role-based access control
-4. **@CustomTimeout()**: Apply only when necessary for long-running operations
-5. **Combining Decorators**: Order matters - place authentication decorators first
-
-## Common Patterns
-
-### Combining Multiple Decorators
-
-```typescript
-@Controller('admin')
-export class AdminController {
-  @Get('user/:id')
-  @Roles(RoleEnum.ADMIN)
-  @CustomTimeout(5000)
-  async getUserDetails(
-    @Param('id') id: string,
-    @CurrentUser() admin: JwtUserDetailsDto,
-  ) {
-    // Protected route with custom timeout and role check
-  }
-}
-```
-
-### Public Routes with Custom Timeout
-
-```typescript
-@Controller('public')
-export class PublicController {
-  @Get('status')
-  @Public()
-  @CustomTimeout(1000)
-  async getStatus() {
-    // Public route with quick timeout
-  }
-}
-```
-
-### User-Specific Data Access
-
-```typescript
-@Controller('users')
-export class UsersController {
-  @Get('my-posts')
-  async getMyPosts(
-    @CurrentUser() user: JwtUserDetailsDto,
-    @Query() query: GetPostsQueryDto,
-  ) {
-    return this.postService.findByUserId(user.id, query);
-  }
-}
-```
-
-### Resource Creation with Owner
-
-```typescript
-@Controller('resources')
-export class ResourcesController {
-  @Post()
-  async create(
-    @Body() createResourceDto: CreateResourceRequestDto,
-    @CurrentUser() user: JwtUserDetailsDto,
-  ) {
-    return this.resourceService.create(createResourceDto, user.id);
-  }
-}
-```
-
-## Security Considerations
-
-### Authentication Flow
-
-```typescript
-@Controller('auth')
-export class AuthController {
-  @Post('login')
-  @Public()
-  async login(@Body() loginDto: LoginDto) {
-    // Public endpoint - no authentication required
-  }
-
-  @Get('profile')
-  async getProfile(@CurrentUser() user: JwtUserDetailsDto) {
-    // Protected endpoint - requires authentication
-    return this.service.findOne(user.id);
-  }
-}
-```
-
-### Role-Based Authorization
-
-```typescript
-@Controller('admin')
-@UseGuards(RolesGuard) // Apply guard at controller level
-export class AdminController {
-  @Get('dashboard')
-  @Roles(RoleEnum.ADMIN)
-  async getDashboard(@CurrentUser() user: JwtUserDetailsDto) {
-    // Only admins can access
-  }
-}
-```
-
-Would you like me to make any adjustments to the rule or add more specific examples?

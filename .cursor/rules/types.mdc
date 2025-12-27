@@ -1,0 +1,89 @@
+---
+globs: src/modules/**/types/**/*.ts
+---
+
+# Types Guidelines
+
+## Purpose
+
+The `types/` folder contains type definitions, interfaces, and enums that are NOT DTOs or Entities. Use it for domain-specific types, business logic interfaces, and custom type unions.
+
+## Directory Structure
+
+```
+module/
+└── types/
+    ├── [name].interface.ts  # Interfaces
+    ├── [name].type.ts       # Type aliases and unions
+    └── [name].enum.ts       # Enums
+```
+
+## Naming Conventions
+
+- **Interfaces**: `[Name]Interface` in `[name].interface.ts`
+  - Example: `LobbyUser` → `lobby-user.interface.ts`
+- **Types**: `[Name]` in `[name].type.ts`
+  - Example: `LobbyStatus` → `lobby-status.type.ts`
+- **Enums**: `[Name]Enum` in `[name].enum.ts`
+  - Example: `UserRole` → `user-role.enum.ts`
+
+## Examples
+
+### Interface
+
+```typescript
+// lobby-user.interface.ts
+export interface LobbyUser {
+  userId: number;
+  username: string;
+  isReady: boolean;
+  isHost: boolean;
+}
+```
+
+### Type Alias
+
+```typescript
+// lobby-status.type.ts
+export type LobbyStatus = 'creating' | 'open' | 'in_game' | 'closed';
+```
+
+### Type Union
+
+```typescript
+// pvp-event-name.type.ts
+export type PvpEventName =
+  | 'lobby:join'
+  | 'lobby:leave'
+  | 'round:start';
+```
+
+### Enum
+
+```typescript
+// user-role.enum.ts
+export enum UserRole {
+  ADMIN = 'admin',
+  USER = 'user',
+  GUEST = 'guest',
+}
+```
+
+## When to Use
+
+- ✅ Business logic interfaces (not for database entities)
+- ✅ Union types for status, events, or actions
+- ✅ Enums for fixed value sets
+- ✅ Complex type definitions used across the module
+
+## When NOT to Use
+
+- ❌ DTOs (use `dto/` folder instead)
+- ❌ Database entities (use `entities/` folder instead)
+- ❌ Types used across multiple modules (consider `common/` folder)
+
+## Notes
+
+- Keep types simple and focused
+- Export all types for reusability
+- Use meaningful names that reflect the domain

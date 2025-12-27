@@ -6,87 +6,44 @@ alwaysApply: true
 
 # NestJS Project - Master Rule Index
 
-This document serves as the central index for all active Cursor rules within this NestJS repository. These rules define processes, structures, and guidelines for development.
+Central index for all Cursor rules defining development guidelines and best practices.
 
-## Core Architecture & Structure
+## Core Architecture
 
-Fundamental project structure, setup, and general development guidelines.
-
-| Rule File              | Description                                          |
-| :--------------------- | :--------------------------------------------------- |
-| @cursor-rules.mdc      | How to add or edit Cursor rules in our project       |
-| @project-structure.mdc | Project structure and file organization guidelines   |
-| @decorators.mdc        | Custom decorator usage and implementation guidelines |
-| @current-user.mdc      | Guidelines for using the @CurrentUser decorator      |
+| Rule File              | Description                                                       |
+| :--------------------- | :---------------------------------------------------------------- |
+| @project-structure.mdc | Project structure and module organization                         |
+| @decorators.mdc        | Common decorators (@CurrentUser, @Public, @Roles, @CustomTimeout) |
 
 ## Application Components
 
-Rules for implementing core NestJS components and features.
+| Rule File                    | Description                                                          |
+| :--------------------------- | :------------------------------------------------------------------- |
+| @entity.mdc                  | TypeORM entities: structure, naming, relationships, standard fields  |
+| @service-layers.mdc          | Service organization: domain separation, layering, method decomposition |
+| @service-implementation.mdc  | Service implementation: DTOs, error handling, logging, dependencies  |
+| @controller.mdc              | HTTP layer: routing, delegation to services, no business logic       |
+| @repository.mdc              | Database access: use @InjectRepository, no custom repositories       |
+| @dto.mdc                     | Data Transfer Objects: validation, transformation, serialization     |
+| @types.mdc                   | Type definitions: interfaces, type aliases, enums (non-DTO/Entity)  |
 
-| Rule File       | Description                                                 |
-| :-------------- | :---------------------------------------------------------- |
-| @entity.mdc     | TypeORM entity implementation and database model guidelines |
-| @service.mdc    | Service layer implementation and business logic guidelines  |
-| @controller.mdc | Controller implementation and API endpoint guidelines       |
-| @repository.mdc | Repository pattern implementation and database access rules |
-| @dto.mdc        | Data Transfer Object (DTO) implementation guidelines        |
+## WebSocket Components
 
-## Infrastructure & Utilities
+| Rule File             | Description                                                                     |
+| :-------------------- | :------------------------------------------------------------------------------ |
+| @gateway.mdc          | WebSocket gateway: event handlers, SocketService integration, lifecycle hooks  |
+| @socket-service.mdc   | Socket business logic: event emissions, room management, disconnection handling |
 
-Rules for implementing infrastructure components and utilities.
+## Infrastructure
 
-| Rule File   | Description                               |
-| :---------- | :---------------------------------------- |
-| @logger.mdc | Logging implementation and best practices |
+| Rule File            | Description                                          |
+| :------------------- | :--------------------------------------------------- |
+| @logger.mdc          | Winston-based logging service usage                  |
+| @pagination.mdc      | Pagination implementation with shared infrastructure |
+| @domain-exception.mdc| Domain exceptions: error handling, error codes, best practices |
 
-## Usage Guidelines
+## Usage
 
-1. Each rule file contains detailed implementation guidelines, examples, and best practices
-2. Rules are designed to maintain consistency across the codebase
-3. Follow the guidelines in each rule file when implementing new features
-4. Rules can be referenced using the @ symbol followed by the rule filename
-
-## Rule Categories
-
-### Core Architecture
-
-- Project structure and organization
-- Module organization and dependencies
-- File naming conventions
-- Directory structure
-
-### Components
-
-- Controller implementation
-- Service layer patterns
-- Repository pattern usage
-- DTO structure and validation
-
-### Infrastructure
-
-- Logging configuration
-- Error handling
-- Custom decorators
-- Database access patterns
-
-### Testing & Quality Assurance
-
-- Jest testing standards
-- Test-driven development workflow
-- Mocking patterns and best practices
-- Test coverage requirements
-
-## Best Practices
-
-1. Always check relevant rules before implementing new features
-2. Follow the established patterns for consistency
-3. Update rules when introducing new patterns or best practices
-4. Keep rules up to date with project evolution
-
-## Contributing to Rules
-
-1. Place new rules in the `.cursor/rules/` directory
-2. Follow the rule file naming convention (kebab-case.mdc)
-3. Include a clear description and examples
-
-4. Update this index when adding new rules
+1. Follow guidelines when implementing new features
+2. Reference rules using @ symbol (e.g., @entity.mdc)
+3. Update rules when introducing new patterns
